@@ -1,13 +1,19 @@
 use log;
+use tokio_postgres::Row;
 use tonic::async_trait;
 
-use std::rc::Rc;
-
+use crate::error::UdmError;
 use crate::parsers::settings;
-use crate::{error, UdmResult};
-use sea_query::foreign_key::{ForeignKeyAction, ForeignKeyCreateStatement};
+use crate::UdmResult;
+use sea_query::foreign_key::ForeignKeyAction;
+use sea_query::foreign_key::ForeignKeyCreateStatement;
 use sea_query::value::Value;
-use sea_query::{ColumnDef, Iden, Table};
+use sea_query::ColumnDef;
+use sea_query::Iden;
+use sea_query::Table;
+use std::rc::Rc;
+use std::sync::Arc;
+pub mod executor;
 pub mod postgres;
 pub mod sqlite;
 
@@ -30,22 +36,40 @@ pub trait SqlTableTransactionsFactory: SqlTransactionsFactory {
         builder: impl sea_query::backend::SchemaBuilder,
         column_def: &mut ColumnDef,
     ) -> String;
+    fn truncate_table<T: sea_query::Iden + 'static>(
+        table: T,
+        builder: impl sea_query::backend::SchemaBuilder,
+    ) -> String {
+        Table::truncate().table(table).to_owned().to_string(builder)
+    }
 }
 
-// This generates schemas and manipulates the database outside of the data itself
-// This ipml on each individual table you want to
+// This Generates and executes the actual queries
 #[async_trait]
 pub trait DatabaseTransactionsFactory {
     async fn collect_all_current_tables(&mut self) -> UdmResult<Vec<String>>;
     async fn gen_schmea(&mut self) -> UdmResult<()>;
+    async fn truncate_schema(&self) -> UdmResult<()>;
 }
 
-// This will generate all the queries
-// This manipluates the data itself
 #[async_trait]
-pub trait SqlQueryExecutor {
-    fn gen_query(&self) -> Box<dyn SqlTransactionsFactory>;
-    async fn execute<T>(&self) -> Result<T, error::UdmError>;
+pub trait DbConnection: DatabaseTransactionsFactory + Send + Sync {
+    // Documentation for datatypes: https://docs.rs/postgres/0.14.0/postgres/types/trait.FromSql.html#types
+    async fn insert(&self, stmt: String) -> UdmResult<i32>;
+    async fn delete(&self, stmt: String) -> UdmResult<()>;
+    async fn update(&self, stmt: String) -> UdmResult<i32>;
+    async fn select(&self, stmt: String) -> UdmResult<Vec<Row>>;
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DbMetaData {
+    pub dbtype: Arc<DbType>,
+}
+
+impl DbMetaData {
+    pub fn new(dbtype: Arc<DbType>) -> Self {
+        Self { dbtype }
+    }
 }
 
 // A loadable enum depending on the mechanism is chosen
@@ -77,9 +101,6 @@ impl DbType {
         }
     }
 }
-
-#[async_trait]
-pub trait DbConnection: DatabaseTransactionsFactory {}
 
 // Defines the Schema and how we interact with the DB.
 // The structs generated in RPC Frameworks
@@ -139,6 +160,19 @@ impl SqlTableTransactionsFactory for FluidRegulationSchema {
             .build(builder)
     }
 }
+
+impl TryFrom<String> for FluidRegulationSchema {
+    type Error = UdmError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "FluidRegulation" => Ok(FluidRegulationSchema::Table),
+            "fr_id" => Ok(FluidRegulationSchema::FrId),
+            "gpio_pin" => Ok(FluidRegulationSchema::GpioPin),
+            "regulator_type" => Ok(FluidRegulationSchema::RegulatorType),
+            _ => Err(UdmError::ApiFailure("Failed to collect Column".to_string())),
+        }
+    }
+}
 #[derive(Iden, Eq, PartialEq, Debug)]
 #[iden = "Ingredient"]
 pub enum IngredientSchema {
@@ -181,6 +215,26 @@ impl SqlTransactionsFactory for IngredientSchema {
             "fr_id" => Some(Self::FrId),
             "instruction_id" => Some(Self::InstructionId),
             _ => None,
+        }
+    }
+}
+impl TryFrom<String> for IngredientSchema {
+    type Error = UdmError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "Ingredient" => Ok(Self::Table),
+            "ingredient_id" => Ok(Self::IngredientId),
+            "name" => Ok(Self::Name),
+            "alcoholic" => Ok(Self::Alcoholic),
+            "description" => Ok(Self::Description),
+            "is_active" => Ok(Self::IsActive),
+            "amount" => Ok(Self::Amount),
+            "ingredient_type" => Ok(Self::IngredientType),
+            "fr_id" => Ok(Self::FrId),
+            "instruction_id" => Ok(Self::InstructionId),
+            _ => Err(UdmError::ApiFailure(
+                "Failed to collect IngredientSchema Column".to_string(),
+            )),
         }
     }
 }
@@ -276,6 +330,21 @@ impl SqlTransactionsFactory for InstructionSchema {
         }
     }
 }
+impl TryFrom<String> for InstructionSchema {
+    type Error = UdmError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "instruction" => Ok(Self::Table),
+            "instruction_id" => Ok(Self::InstructionId),
+            "instruction_detail" => Ok(Self::InstructionDetail),
+            "instruction_name" => Ok(Self::InstructionName),
+            _ => Err(UdmError::ApiFailure(
+                "Failed to collect InstructionSchema column".to_string(),
+            )),
+        }
+    }
+}
+
 impl SqlTableTransactionsFactory for InstructionSchema {
     fn create_table(builder: impl sea_query::backend::SchemaBuilder) -> String {
         Table::create()
@@ -328,6 +397,20 @@ impl SqlTransactionsFactory for InstructionToRecipeSchema {
             "instruction_id" => Some(Self::InstructionId),
             "instruction_order" => Some(Self::InstructionOrder),
             _ => None,
+        }
+    }
+}
+impl TryFrom<String> for InstructionToRecipeSchema {
+    type Error = UdmError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "InstructionToRecipe" => Ok(Self::Table),
+            "recipe_id" => Ok(Self::RecipeId),
+            "instruction_id" => Ok(Self::InstructionId),
+            "instruction_order" => Ok(Self::InstructionOrder),
+            _ => Err(UdmError::ApiFailure(
+                "Failed to collect InstructionToRecipeSchema Column".to_string(),
+            )),
         }
     }
 }
@@ -398,6 +481,20 @@ impl SqlTransactionsFactory for RecipeSchema {
             "drink_size" => Some(Self::DrinkSize),
             "description" => Some(Self::Description),
             _ => None,
+        }
+    }
+}
+impl TryFrom<String> for RecipeSchema {
+    type Error = UdmError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "Recipe" => Ok(Self::Table),
+            "recipe_id" => Ok(Self::RecipeId),
+            "name" => Ok(Self::Name),
+            "user_input" => Ok(Self::UserInput),
+            "drink_size" => Ok(Self::DrinkSize),
+            "description" => Ok(Self::Description),
+            _ => Ok(Self::Table),
         }
     }
 }

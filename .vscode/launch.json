@@ -40,7 +40,10 @@
                 ".config/local.toml",
                 "-ddddd"
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "UDM_POSTGRES_PW": "postgres"
+            }
         },
         {
             "type": "lldb",
@@ -76,7 +79,11 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "fluid",
+                "show",
+                "fr_id=1"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {

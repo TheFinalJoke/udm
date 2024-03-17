@@ -1,3 +1,4 @@
+use regex::Error as RegexError;
 use rusqlite::Error as rusqlite_error;
 use std::error::Error as GenericError;
 use thiserror::Error;
@@ -10,6 +11,12 @@ pub enum UdmError {
     RusqliteError(#[from] rusqlite_error),
     #[error("An Error from Postgres {0}")]
     PostgresError(#[from] PostgresError),
+    #[error("Invalid Input {0}")]
+    InvalidInput(String),
+    #[error("Api Failure: {0}")]
+    ApiFailure(String),
+    #[error("Error Parsing: {0}")]
+    ParsingError(#[from] RegexError),
 }
 
 impl From<String> for UdmError {
