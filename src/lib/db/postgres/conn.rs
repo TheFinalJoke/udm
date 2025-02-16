@@ -151,6 +151,7 @@ impl DatabaseTransactionsFactory for OpenPostgresConnection {
             tracing::error!("{}", query_err);
             std::process::exit(20)
         }
+        tracing::info!("Database and Tables are created for Sql Daemon Server");
         Ok(())
     }
     async fn gen_schmea_dc(&mut self) -> UdmResult<()> {
@@ -160,6 +161,7 @@ impl DatabaseTransactionsFactory for OpenPostgresConnection {
             tracing::error!("{}", query_err);
             std::process::exit(20)
         }
+        tracing::info!("Database and Tables are created for Drink Controller");
         Ok(())
     }
     async fn truncate_schema(&self) -> UdmResult<()> {

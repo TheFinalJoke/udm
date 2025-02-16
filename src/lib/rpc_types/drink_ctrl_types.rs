@@ -85,9 +85,14 @@ pub(crate) struct PumpLogger {
     pub(crate) fluid_id: Option<i32>,
 }
 impl PumpLogger {
+    pub(crate) fn create_uuid() -> Uuid {
+        let uuid = Uuid::new_v4();
+        tracing::info!("Created a new UUID {}", uuid);
+        uuid
+    }
     pub(crate) fn new(req_id: Option<Uuid>, req_type: ReqType, fluid_id: Option<i32>) -> Self {
         let req_id = req_id.unwrap_or(Uuid::new_v4());
-        tracing::info!("Created UUID {} for {}", req_id, req_type);
+        tracing::info!("Using UUID {} for {}", req_id, req_type);
         Self {
             req_id,
             req_type,

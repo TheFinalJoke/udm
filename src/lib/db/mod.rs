@@ -254,7 +254,7 @@ impl SqlTableTransactionsFactory for PumpLogSchema {
         Table::create()
             .table(Self::Table)
             .if_not_exists()
-            .col(ColumnDef::new(Self::FluidId).integer().not_null())
+            .col(ColumnDef::new(Self::FluidId).integer())
             .col(ColumnDef::new(Self::ReqId).uuid().not_null().primary_key())
             .col(ColumnDef::new(Self::ReqType).integer())
             .build(builder)

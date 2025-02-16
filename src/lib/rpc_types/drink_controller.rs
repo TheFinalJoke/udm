@@ -153,13 +153,14 @@ impl DrinkControllerService for DrinkControllerContext {
         request: Request<GetPumpGpioInfoRequest>,
     ) -> Result<Response<GetPumpGpioInfoResponse>, Status> {
         tracing::info!("Got request {request:?}");
+        let uuid = PumpLogger::create_uuid();
         let fr = request
             .get_ref()
             .fr
             .ok_or(trace_log_error(Status::invalid_argument(
                 "Missing Fluid regulator".to_string(),
             )))?;
-        let uuid = PumpLogger::new(None, ReqType::GetPumpInfo, fr.fr_id)
+        let uuid = PumpLogger::new(Some(uuid), ReqType::GetPumpInfo, fr.fr_id)
             .publish(&*self.connection)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
