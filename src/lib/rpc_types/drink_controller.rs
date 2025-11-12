@@ -90,7 +90,7 @@ impl GrpcServerFactory<DrinkControllerContext> for DrinkControllerServer {
         let _ = connection
             .gen_schmea_dc()
             .await
-            .map_err(|e| format!("Failed to create database schema {}", e));
+            .map_err(|e| format!("Failed to create database schema {e}"));
         tracing::info!("Attempting to Drink Controller Service on {}", self.addr);
         let db_metadata = DbMetaData::new(Arc::clone(&db_type));
         let sql_udm_options = SqlUdmServerBuilder::new(
@@ -187,8 +187,7 @@ impl DrinkControllerService for DrinkControllerContext {
         let result = sql_client.collect_fluid_regulators(fetch_query).await?;
         if result.get_ref().fluids.is_empty() || result.get_ref().fluids.len() > 2 {
             return Err(Status::aborted(format!(
-                "Returned no data or too much data {:?}",
-                result
+                "Returned no data or too much data {result:?}"
             )));
         }
         let pin = result.get_ref().fluids[0]
