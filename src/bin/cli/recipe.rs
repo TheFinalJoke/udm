@@ -49,7 +49,7 @@ impl MainCommandHandler for RecipeCommands {
         }
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddRecipeArgs {
     #[arg(
         long,
@@ -93,16 +93,18 @@ impl UdmGrpcActions<Recipe> for AddRecipeArgs {
                 "`Not all required fields were passed`",
             ))));
         }
-        Ok(Recipe {
-            id: 0,
-            name: self.name.clone(),
-            size: DrinkSize::from_str_name(&self.size)
-                .unwrap_or(DrinkSize::Unspecified)
-                .into(),
-            instructions: HashMap::new(),
-            user_input: true,
-            description: self.description.clone(),
-        })
+        Ok(Recipe::builder()
+            .id(0)
+            .name(self.name.clone())
+            .size(
+                DrinkSize::from_str_name(&self.size)
+                    .unwrap_or(DrinkSize::Unspecified)
+                    .into(),
+            )
+            .instructions(HashMap::new())
+            .user_input(true)
+            .description(self.description.clone())
+            .build())
     }
 }
 #[async_trait]
@@ -114,13 +116,11 @@ impl MainCommandHandler for AddRecipeArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_recipe(AddRecipeRequest {
-                recipe: Some(recipe),
-            })
+            .add_recipe(AddRecipeRequest::builder().recipe(recipe).build())
             .await
             .map_err(|e| {
                 tracing::error!("Error occured: {:?}", e);
-                trace_log_error(UdmError::ApiFailure(format!("{}", e)))
+                trace_log_error(UdmError::ApiFailure(format!("{e}")))
             })?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
@@ -130,7 +130,7 @@ impl MainCommandHandler for AddRecipeArgs {
         Ok(())
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowRecipeArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -152,17 +152,15 @@ impl MainCommandHandler for ShowRecipeArgs {
             let fetched = match self.sanatize_input() {
                 Ok(fetch) => fetch,
                 Err(e) => {
-                    println!("{}", e);
+                    println!("{e}");
                     std::process::exit(1)
                 }
             };
             let mut open_connection = options.connect_to_udm().await?;
             let response = open_connection
-                .collect_recipe(CollectRecipeRequest {
-                    expressions: fetched,
-                })
+                .collect_recipe(CollectRecipeRequest::builder().expressions(fetched).build())
                 .await
-                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -173,7 +171,7 @@ impl MainCommandHandler for ShowRecipeArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    println!("Error: Could not show FRs due to: {err}");
                     Ok(())
                 }
             }
@@ -228,7 +226,7 @@ impl ShowHandler<Recipe> for ShowRecipeArgs {
         Ok(collected_queries)
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveRecipeArgs {
     #[arg(short, long, help = "Recipe id to remove", required = true)]
     recipe_id: Option<i32>,
@@ -251,7 +249,7 @@ impl MainCommandHandler for RemoveRecipeArgs {
         if !self.yes {
             let _ = ensure_removal();
         }
-        let req = RemoveRecipeRequest { recipe_id: id };
+        let req = RemoveRecipeRequest::builder().recipe_id(id).build();
         let mut open_conn = options.connect_to_udm().await?;
         let response = open_conn.remove_recipe(req).await;
         tracing::debug!("Got response {:?}", response);
@@ -266,7 +264,7 @@ impl MainCommandHandler for RemoveRecipeArgs {
         Ok(())
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateRecipeArgs {
     #[arg(
         long,
@@ -304,11 +302,9 @@ impl MainCommandHandler for UpdateRecipeArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_recipe(ModifyRecipeRequest {
-                recipe: Some(recipe),
-            })
+            .update_recipe(ModifyRecipeRequest::builder().recipe(recipe).build())
             .await
-            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Inserted into database, got ID back {}",

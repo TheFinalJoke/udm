@@ -36,17 +36,16 @@ pub struct CollectPumpInfoArgs {
 #[async_trait]
 impl MainCommandHandler for CollectPumpInfoArgs {
     async fn handle_command(&self, options: UdmServerOptions) -> UdmResult<()> {
-        let fr = FluidRegulator {
-            pump_num: self.pump_number,
-            gpio_pin: self.gpio_pin,
-            ..Default::default()
-        };
-        let req = GetPumpGpioInfoRequest { fr: Some(fr) };
+        let fr = FluidRegulator::builder()
+            .pump_num(self.pump_number.unwrap_or(0))
+            .gpio_pin(self.gpio_pin.unwrap_or(0))
+            .build();
+        let req = GetPumpGpioInfoRequest::builder().fr(fr).build();
         tracing::info!("Collected Request {:?}", req);
         let mut open_connection = options.connect_to_drink_server().await?; // How do i open up a a drink controller
         tracing::debug!("Opened connection with Drink Server, Sending request to collect Pump info and current state");
         let response = open_connection.get_pump_gpio_info(req).await.map_err(|e| {
-            let message = format!("Fatal Failure on server: {}", e);
+            let message = format!("Fatal Failure on server: {e}");
             trace_log_error(UdmError::ApiFailure(message.clone()))
         })?;
         tracing::debug!("Raw Response: {:?} ", &response);

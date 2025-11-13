@@ -19,7 +19,7 @@ use lib::rpc_types::service_types::ResetRequest;
 use lib::rpc_types::service_types::ResetType;
 use lib::UdmResult;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, bon::Builder)]
 #[command(author, version, about, long_about = None)]
 pub struct UdmCli {
     #[command(flatten)]
@@ -100,7 +100,7 @@ pub enum UdmCommand {
     Drink(drink_server::DrinkServer),
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ResetCommands {
     #[arg(short, long, help = "reset all databases", default_value = "true")]
     all: bool,
@@ -123,7 +123,7 @@ impl MainCommandHandler for ResetCommands {
         let reset = connection
             .reset_db(req)
             .await
-            .map_err(|e| trace_log_error(trace_log_error(UdmError::ApiFailure(format!("{}", e)))));
+            .map_err(|e| trace_log_error(trace_log_error(UdmError::ApiFailure(format!("{e}")))));
         match reset {
             Ok(_) => {
                 tracing::info!("Successfully reset the tables");

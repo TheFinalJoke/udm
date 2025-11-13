@@ -43,7 +43,7 @@ impl TryFrom<i32> for ReqType {
 }
 impl Display for ReqType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 impl MultipleValues for ReqType {
@@ -78,7 +78,7 @@ impl ReqType {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, bon::Builder)]
 pub(crate) struct PumpLogger {
     pub(crate) req_id: Uuid,
     pub(crate) req_type: ReqType,

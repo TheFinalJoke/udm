@@ -46,7 +46,7 @@ impl MainCommandHandler for InstructionCommands {
         }
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddInstructionArgs {
     #[arg(
         long,
@@ -77,11 +77,11 @@ impl UdmGrpcActions<Instruction> for AddInstructionArgs {
                 "`Not all required fields were passed`",
             ))));
         }
-        Ok(Instruction {
-            id: 0,
-            instruction_detail: self.instruction_detail.clone().unwrap(),
-            instruction_name: self.instruction_name.clone().unwrap(),
-        })
+        Ok(Instruction::builder()
+            .instruction_name(self.instruction_name.clone().unwrap())
+            .instruction_detail(self.instruction_detail.clone().unwrap())
+            .id(0)
+            .build())
     }
 }
 #[async_trait]
@@ -93,11 +93,13 @@ impl MainCommandHandler for AddInstructionArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_instruction(AddInstructionRequest {
-                instruction: Some(instruction),
-            })
+            .add_instruction(
+                AddInstructionRequest::builder()
+                    .instruction(instruction)
+                    .build(),
+            )
             .await
-            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Inserted into database, got ID back {}",
@@ -106,7 +108,7 @@ impl MainCommandHandler for AddInstructionArgs {
         Ok(())
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowInstructionArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -127,17 +129,19 @@ impl MainCommandHandler for ShowInstructionArgs {
             let fetched = match self.sanatize_input() {
                 Ok(fetch) => fetch,
                 Err(e) => {
-                    println!("{}", e);
+                    println!("{e}");
                     std::process::exit(1)
                 }
             };
             let mut open_connection = options.connect_to_udm().await?;
             let response = open_connection
-                .collect_instructions(CollectInstructionRequest {
-                    expressions: fetched,
-                })
+                .collect_instructions(
+                    CollectInstructionRequest::builder()
+                        .expressions(fetched)
+                        .build(),
+                )
                 .await
-                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -148,7 +152,7 @@ impl MainCommandHandler for ShowInstructionArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    println!("Error: Could not show FRs due to: {err}");
                     Ok(())
                 }
             }
@@ -197,7 +201,7 @@ impl ShowHandler<Instruction> for ShowInstructionArgs {
         Ok(collected_queries)
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveInstructionArgs {
     #[arg(short, long, required = true)]
     instruction_id: Option<i32>,
@@ -220,7 +224,9 @@ impl MainCommandHandler for RemoveInstructionArgs {
         if !self.yes {
             let _ = ensure_removal();
         }
-        let req = RemoveInstructionRequest { instruction_id: id };
+        let req = RemoveInstructionRequest::builder()
+            .instruction_id(id)
+            .build();
         let mut open_conn = options.connect_to_udm().await?;
         let response = open_conn.remove_instruction(req).await;
         tracing::debug!("Got response {:?}", response);
@@ -236,7 +242,7 @@ impl MainCommandHandler for RemoveInstructionArgs {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateInstructionArgs {
     #[arg(long, value_name = "JSON", help = "Raw json to transform")]
     raw: String,
@@ -295,11 +301,13 @@ impl MainCommandHandler for UpdateInstructionArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_instruction(ModifyInstructionRequest {
-                instruction: Some(instruction),
-            })
+            .update_instruction(
+                ModifyInstructionRequest::builder()
+                    .instruction(instruction)
+                    .build(),
+            )
             .await
-            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Updated database, got ID back {}",

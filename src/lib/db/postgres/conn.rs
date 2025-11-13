@@ -166,7 +166,7 @@ impl DatabaseTransactionsFactory for OpenPostgresConnection {
     }
     async fn truncate_schema(&self) -> UdmResult<()> {
         let tables = r#""InstructionToRecipe", "Ingredient", "Recipe", "Instruction", "FluidRegulation", "Pumplog""#;
-        let query = format!("TRUNCATE TABLE {};", tables);
+        let query = format!("TRUNCATE TABLE {tables};");
         tracing::info!("Running query: {}", &query);
         self.conn
             .batch_execute(query.as_str())
