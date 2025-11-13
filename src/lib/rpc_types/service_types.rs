@@ -235,7 +235,7 @@ impl Operation {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, bon::Builder)]
 pub(crate) struct InstructionToRecipeMetadata {
     pub(crate) id: Option<i32>,
     pub(crate) recipe_id: i32,
@@ -275,7 +275,7 @@ impl Display for GetPumpGpioInfoResponse {
     Direction: Unknown\n\
     Value: Unknown"
                 .to_string();
-            write!(f, "{}", data)
+            write!(f, "{data}")
         } else {
             let metadata = self.metadata.as_ref().unwrap();
             let data = format!(
@@ -285,7 +285,7 @@ impl Display for GetPumpGpioInfoResponse {
     Value: {:?}",
                 self.id, metadata.state, metadata.direction, metadata.value
             );
-            write!(f, "{}", data)
+            write!(f, "{data}")
         }
     }
 }

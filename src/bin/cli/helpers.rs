@@ -24,7 +24,7 @@ pub(crate) trait ShowHandler<T>: MainCommandHandler {
 pub trait ServerOptions {
     fn new(host: String, port: i64) -> Self;
 }
-#[derive(Debug)]
+#[derive(Debug, bon::Builder)]
 pub struct SqlUdmServerCliOptions {
     pub udm_host: String,
     pub udm_port: i64,
@@ -37,7 +37,7 @@ impl ServerOptions for SqlUdmServerCliOptions {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, bon::Builder)]
 pub struct DrinkControllerServerCliOptions {
     pub host: String,
     pub port: i64,
@@ -47,7 +47,7 @@ impl ServerOptions for DrinkControllerServerCliOptions {
         Self { host, port }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, bon::Builder)]
 pub struct UdmServerOptions {
     pub(crate) sql_udm_server: SqlUdmServerCliOptions,
     pub(crate) drink_server: DrinkControllerServerCliOptions,

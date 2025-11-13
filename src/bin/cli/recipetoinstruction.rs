@@ -54,7 +54,7 @@ impl MainCommandHandler for RecipeToInstructionCommands {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateInstructionOrderArgs {
     #[arg(
         long,
@@ -97,12 +97,14 @@ impl MainCommandHandler for UpdateInstructionOrderArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_recipe_instruction_order(UpdateRecipeInstOrderRequest {
-                recipe_orders: [recipe_order].to_vec(),
-                recipe_id: recipe_order.recipe_id,
-            })
+            .update_recipe_instruction_order(
+                UpdateRecipeInstOrderRequest::builder()
+                    .recipe_orders([recipe_order].to_vec())
+                    .recipe_id(recipe_order.recipe_id)
+                    .build(),
+            )
             .await
-            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!("Updated into database");
         println!("Updated into database");
@@ -163,7 +165,7 @@ impl TryFrom<&UpdateInstructionOrderArgs> for RecipeInstructionOrder {
         })
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddInstructionOrderArgs {
     #[arg(
         long,
@@ -198,13 +200,15 @@ impl MainCommandHandler for AddInstructionOrderArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_recipe_instruction_order(AddRecipeInstOrderRequest {
-                recipe_orders: [instruct_recipe].to_vec(),
-            })
+            .add_recipe_instruction_order(
+                AddRecipeInstOrderRequest::builder()
+                    .recipe_orders([instruct_recipe].to_vec())
+                    .build(),
+            )
             .await
             .map_err(|e| {
                 tracing::error!("{}", &e.to_string());
-                trace_log_error(UdmError::ApiFailure(format!("{}", e)))
+                trace_log_error(UdmError::ApiFailure(format!("{e}")))
             })?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
@@ -219,12 +223,11 @@ impl TryFrom<&AddInstructionOrderArgs> for RecipeInstructionOrder {
     type Error = UdmError;
 
     fn try_from(value: &AddInstructionOrderArgs) -> Result<Self, Self::Error> {
-        Ok(RecipeInstructionOrder {
-            recipe_id: value.recipe_id.unwrap(),
-            instruction_id: value.instruction_id.unwrap(),
-            position: value.position.unwrap(),
-            id: None,
-        })
+        Ok(RecipeInstructionOrder::builder()
+            .recipe_id(value.recipe_id.unwrap())
+            .instruction_id(value.instruction_id.unwrap())
+            .position(value.position.unwrap())
+            .build())
     }
 }
 impl UdmGrpcActions<RecipeInstructionOrder> for AddInstructionOrderArgs {
@@ -261,7 +264,7 @@ impl FieldValidation for AddInstructionOrderArgs {
         unimplemented!()
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowInstructionOrderArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -282,11 +285,13 @@ impl MainCommandHandler for ShowInstructionOrderArgs {
             let fetched = self.sanatize_input()?;
             let mut open_connection = options.connect_to_udm().await?;
             let response = open_connection
-                .collect_recipe_instruction_order(CollectRecipeInstOrderRequest {
-                    expressions: fetched,
-                })
+                .collect_recipe_instruction_order(
+                    CollectRecipeInstOrderRequest::builder()
+                        .expressions(fetched)
+                        .build(),
+                )
                 .await
-                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -297,7 +302,7 @@ impl MainCommandHandler for ShowInstructionOrderArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    println!("Error: Could not show FRs due to: {err}");
                     Ok(())
                 }
             }
@@ -348,7 +353,7 @@ impl ShowHandler<RecipeInstructionOrder> for ShowInstructionOrderArgs {
         Ok(collected_queries)
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveInstructionOrderArgs {
     #[arg(short, long, required = true)]
     id: i32,

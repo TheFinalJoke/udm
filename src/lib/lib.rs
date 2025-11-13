@@ -44,6 +44,6 @@ impl Retrieval<Config> for FileRetrieve {
             ))
             .build();
         tracing::trace!("Settings ConfigBuild {:?}", &settings);
-        Ok(settings.unwrap_or_else(|error| panic!("Failed to get Config {}", error)))
+        Ok(settings.unwrap_or_else(|error| panic!("Failed to get Config {error}")))
     }
 }

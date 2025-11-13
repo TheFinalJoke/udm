@@ -20,7 +20,7 @@ use tracing::debug;
 use tracing::info;
 pub mod cli;
 
-#[derive(Clone)]
+#[derive(Clone, bon::Builder)]
 struct GenerateDrinkControllerServer {
     configerator: Arc<UdmConfigurer>,
     notify: Arc<Notify>,
@@ -48,7 +48,7 @@ impl GenerateDrinkControllerServer {
         let _ = drink_controller.start_server().await;
     }
 }
-#[derive(Clone)]
+#[derive(Clone, bon::Builder)]
 struct GenerateSqlDaemonServer {
     configerator: Arc<UdmConfigurer>,
     notify: Arc<Notify>,

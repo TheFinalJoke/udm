@@ -159,7 +159,7 @@ impl MultipleValues for IngredientType {
 
 impl Display for IngredientType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -266,7 +266,7 @@ impl MultipleValues for DrinkSize {
 
 impl Display for DrinkSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

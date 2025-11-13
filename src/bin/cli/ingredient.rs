@@ -51,7 +51,7 @@ impl MainCommandHandler for IngredientCommands {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddIngredientArgs {
     #[arg(
         long,
@@ -110,13 +110,15 @@ impl MainCommandHandler for AddIngredientArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_ingredient(AddIngredientRequest {
-                ingredient: Some(ingredient),
-            })
+            .add_ingredient(
+                AddIngredientRequest::builder()
+                    .ingredient(ingredient)
+                    .build(),
+            )
             .await
             .map_err(|e| {
                 tracing::error!("{}", &e.to_string());
-                trace_log_error(UdmError::ApiFailure(format!("{}", e)))
+                trace_log_error(UdmError::ApiFailure(format!("{e}")))
             })?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
@@ -206,7 +208,7 @@ impl FieldValidation for AddIngredientArgs {
         Ok(())
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateIngredientArgs {
     #[arg(
         long,
@@ -252,13 +254,15 @@ impl MainCommandHandler for UpdateIngredientArgs {
         });
         let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_ingredient(ModifyIngredientRequest {
-                ingredient: Some(ingredient),
-                update_fr: self.update_fr,
-                update_instruction: self.update_instruction,
-            })
+            .update_ingredient(
+                ModifyIngredientRequest::builder()
+                    .ingredient(ingredient)
+                    .update_fr(self.update_fr)
+                    .update_instruction(self.update_instruction)
+                    .build(),
+            )
             .await
-            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Inserted into database, got ID back {}",
@@ -321,7 +325,7 @@ impl TryFrom<&UpdateIngredientArgs> for Ingredient {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowIngredientArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -346,7 +350,7 @@ impl MainCommandHandler for ShowIngredientArgs {
                     expressions: fetched,
                 })
                 .await
-                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{}", e))));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -357,7 +361,7 @@ impl MainCommandHandler for ShowIngredientArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    tracing::error!("Error: Could not show FRs due to: {}", err);
                     Ok(())
                 }
             }
@@ -428,7 +432,7 @@ impl ShowHandler<Ingredient> for ShowIngredientArgs {
         Ok(collected_queries)
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveIngredientArgs {
     #[arg(short, long, required = true)]
     ingredient_id: i32,

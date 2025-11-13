@@ -6,6 +6,7 @@ use crate::rpc_types::drink_ctrl_types::CleanCycleRequest;
 use crate::rpc_types::drink_ctrl_types::CleanCycleResponse;
 // use std::net::IpAddr;
 use std::net::Ipv4Addr;
+use std::vec;
 // use crate::rpc_types::drink_ctrl_types::CleanType;
 use crate::db::DbConnection;
 use crate::db::DbMetaData;
@@ -166,21 +167,21 @@ impl DrinkControllerService for DrinkControllerContext {
             .map_err(|e| Status::internal(e.to_string()))?;
         let fetch_query = {
             if let Some(pump_num) = fr.pump_num {
-                CollectFluidRegulatorsRequest {
-                    expressions: vec![FetchData {
-                        column: "pump_num".to_string(),
-                        operation: Operation::Equal.into(),
-                        values: pump_num.to_string(),
-                    }],
-                }
+                CollectFluidRegulatorsRequest::builder()
+                    .expressions(vec![FetchData::builder()
+                        .column("pump_num".to_string())
+                        .operation(Operation::Equal.into())
+                        .values(pump_num.to_string())
+                        .build()])
+                    .build()
             } else {
-                CollectFluidRegulatorsRequest {
-                    expressions: vec![FetchData {
-                        column: "gpio_pin".to_string(),
-                        operation: Operation::Equal.into(),
-                        values: fr.gpio_pin.unwrap().to_string(),
-                    }],
-                }
+                CollectFluidRegulatorsRequest::builder()
+                    .expressions(vec![FetchData::builder()
+                        .column("gpio_pin".to_string())
+                        .operation(Operation::Equal.into())
+                        .values(fr.gpio_pin.unwrap().to_string())
+                        .build()])
+                    .build()
             }
         };
         let mut sql_client = self.sql_udm_client.clone().unwrap();
@@ -195,25 +196,25 @@ impl DrinkControllerService for DrinkControllerContext {
             .ok_or(Status::invalid_argument("Missing Gpio Pin".to_string()))?;
         let poll = PollGpio::new(
             Gpio::new().map_err(|e| Status::aborted(e.to_string()))?,
-            pin as u8,
+            pin.try_into().unwrap(),
         )
         .unwrap();
         if let Some(pin_info) = poll.pin_info {
-            Ok(GetPumpGpioInfoResponse {
-                metadata: Some(GpioMetadata {
-                    direction: GpioDirection::from(pin_info.mode()).into(),
-                    state: GpioState::from(pin_info.read()).into(),
-                    value: None,
-                }),
-                id: uuid.to_string(),
-            }
-            .to_response())
+            Ok(GetPumpGpioInfoResponse::builder()
+                .metadata(
+                    GpioMetadata::builder()
+                        .direction(GpioDirection::from(pin_info.mode()).into())
+                        .state(GpioState::from(pin_info.read()).into())
+                        .build(),
+                )
+                .id(uuid.to_string())
+                .build()
+                .to_response())
         } else {
-            Ok(GetPumpGpioInfoResponse {
-                metadata: None,
-                id: uuid.to_string(),
-            }
-            .to_response())
+            Ok(GetPumpGpioInfoResponse::builder()
+                .id(uuid.to_string())
+                .build()
+                .to_response())
         }
     }
     async fn stop_emergency(

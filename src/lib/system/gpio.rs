@@ -1,17 +1,20 @@
 use crate::error::trace_log_error;
 use crate::error::UdmError;
-use crate::rpc_types::gpio_types;
+// use crate::rpc_types::gpio_types;
 use crate::UdmResult;
 use rppal::gpio::Gpio;
 use rppal::gpio::Pin;
+#[allow(dead_code)]
 pub(crate) trait PollSysDevice {
     fn collect(&mut self) -> UdmResult<Self>
     where
         Self: std::marker::Sized;
 }
 
+#[allow(dead_code)]
 trait Calculation {}
 
+#[allow(dead_code)]
 pub(crate) struct PollGpio {
     pub(crate) gpio_pin: u8,
     pub(crate) pin_info: Option<Pin>,

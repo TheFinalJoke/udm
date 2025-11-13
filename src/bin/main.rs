@@ -18,16 +18,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let cli_opts = cli::UdmCli::parse();
     UdmLogger::init(UdmLoggerType::Bin, cli_opts.verbose, None)?;
     tracing::info!("Initialized logger");
-    let server_options = UdmServerOptions {
-        sql_udm_server: SqlUdmServerCliOptions::new(
+    let server_options = UdmServerOptions::builder()
+        .sql_udm_server(SqlUdmServerCliOptions::new(
             cli_opts.udm_server.to_string(),
             cli_opts.udm_port,
-        ),
-        drink_server: DrinkControllerServerCliOptions::new(
+        ))
+        .drink_server(DrinkControllerServerCliOptions::new(
             cli_opts.drink_server.to_string(),
             cli_opts.drink_ctrl_port,
-        ),
-    };
+        ))
+        .build();
     tracing::info!("Server cli options created: {:?}", &server_options);
     if let Some(commands) = &cli_opts.command {
         match commands {
