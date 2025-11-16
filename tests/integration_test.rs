@@ -6,7 +6,7 @@ fn fluid_regulation_table_create() {
     let sql_query = [
         r#"CREATE TABLE IF NOT EXISTS "FluidRegulation""#,
         r#"( "fr_id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,"#,
-        r#""regulator_type" integer NOT NULL, "gpio_pin" integer )"#,
+        r#""regulator_type" integer NOT NULL, "gpio_pin" integer, "pump_num" integer NULL )"#,
     ]
     .join(" ");
 

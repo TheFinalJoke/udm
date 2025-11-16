@@ -114,7 +114,7 @@ mod tests {
             .build();
 
         let query = fr.gen_insert_query().to_string(PostgresQueryBuilder);
-        let expected_query = r#"INSERT INTO "FluidRegulation" ("gpio_pin", "regulator_type", "pump_num") VALUES (23, 3, 2) RETURNING "fr_id""#.to_string();
+        let expected_query = r#"INSERT INTO "FluidRegulation" ("gpio_pin", "regulator_type") VALUES (23, 3) RETURNING "fr_id""#.to_string();
         assert_eq!(query, expected_query)
     }
 
@@ -135,7 +135,7 @@ mod tests {
             .pump_num(0)
             .build();
         let query = fr.gen_update_query().to_string(PostgresQueryBuilder);
-        let expected_query = r#"UPDATE "FluidRegulation" SET "gpio_pin" = 23, "regulator_type" = 3, "pump_num" = 0 WHERE "fr_id" = 1 RETURNING "fr_id""#.to_string();
+        let expected_query = r#"UPDATE "FluidRegulation" SET "gpio_pin" = 23, "regulator_type" = 3 WHERE "fr_id" = 1 RETURNING "fr_id""#.to_string();
         assert_eq!(query, expected_query)
     }
 }

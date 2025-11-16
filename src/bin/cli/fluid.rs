@@ -335,11 +335,13 @@ mod tests {
             .gpio_pin(12)
             .build();
         let fr = add_fluid.sanatize_input();
-        let expected_result = FluidRegulator {
-            regulator_type: Some(RegulatorType::Valve.into()),
-            gpio_pin: Some(12),
-            ..Default::default()
-        };
+
+        let expected_result = FluidRegulator::builder()
+            .regulator_type(RegulatorType::Valve.into())
+            .gpio_pin(12)
+            .pump_num(0)
+            .fr_id(0)
+            .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
     #[test]
@@ -380,7 +382,6 @@ mod tests {
             .fr_id(1)
             .regulator_type(RegulatorType::Valve.into())
             .gpio_pin(12)
-            .pump_num(0)
             .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
