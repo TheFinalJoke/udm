@@ -56,8 +56,10 @@ impl UdmLogger {
                         "Daemon requires a log path".to_string(),
                     )));
                 }
-                let file = File::create(log_file_path.unwrap_or("/var/log/udm/udm_daemon.log"))
-                    .map_err(|e| trace_log_error(UdmError::LoggerError(e.to_string())))?;
+                let file_path = log_file_path.unwrap_or("/var/log/udm/udm_daemon.log");
+                let file = File::create(file_path).map_err(|e| {
+                    trace_log_error(UdmError::LoggerError(format!("Path: {file_path}, {e}")))
+                })?;
                 layers.push(
                     tracing_subscriber::fmt::layer()
                         .with_line_number(true)
