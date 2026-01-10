@@ -1,3 +1,8 @@
+// Protocol Buffer definitions for drink controller operations.
+//
+// This file defines message types for controlling drink dispensing,
+// cleaning cycles, and GPIO pump operations.
+
 syntax = "proto3";
 package drink_ctrl_types;
 
@@ -5,6 +10,7 @@ import "fhs.proto";
 import "gpio.proto";
 import "recipe.proto";
 
+// CleanType defines the intensity and duration of a cleaning cycle.
 enum CleanType {
   CLEAN_TYPE_UNSPECIFIED = 0;
   CLEAN_TYPE_SHORT = 1;
@@ -13,16 +19,22 @@ enum CleanType {
   CLEAN_TYPE_CUSTOM = 4;
 }
 
+// DispenseDrinkRequest initiates a drink dispensing operation
+// with the specified ingredients.
 message DispenseDrinkRequest {
   repeated recipe_types.Ingredient ingredients = 1;
 }
 
+// DispenseDrinkResponse provides the result of a drink dispensing
+// operation including status and GPIO metadata.
 message DispenseDrinkResponse {
   string message = 1;
   gpio_types.GpioMetadata metadata = 2;
   string id = 3;
 }
 
+// CleanCycleRequest initiates a cleaning cycle for a fluid
+// regulator using water.
 message CleanCycleRequest {
   fhs_types.FluidRegulator fr = 1;
   fhs_types.FluidRegulator water_fr = 2;
@@ -30,28 +42,38 @@ message CleanCycleRequest {
   int32 duration_sec = 4;
 }
 
+// CleanCycleResponse provides the result of a cleaning cycle
+// operation.
 message CleanCycleResponse {
   gpio_types.GpioMetadata metadata = 1;
   bool successful = 2;
   string id = 3;
 }
 
+// GetPumpGpioInfoRequest requests GPIO information for a
+// specific fluid regulator.
 message GetPumpGpioInfoRequest {
   fhs_types.FluidRegulator fr = 1;
 }
 
+// GetPumpGpioInfoResponse returns GPIO metadata for the
+// requested pump.
 message GetPumpGpioInfoResponse {
   gpio_types.GpioMetadata metadata = 1;
   string id = 2;
 }
 
+// PollDrinkStreamRequest polls the status of an ongoing
+// drink dispensing operation.
 message PollDrinkStreamRequest {
-  string id = 1; //  UUID of the request
+  string id = 1; // UUID of the request
   gpio_types.GpioMetadata metadata = 2;
 }
 
+// PollDrinkStreamResponse returns the current status of a
+// drink dispensing operation.
 message PollDrinkStreamResponse {
-  string id = 1; //  UUID of the request
+  string id = 1; // UUID of the request
   gpio_types.GpioMetadata metadata = 2;
   bool is_finished = 3;
 }

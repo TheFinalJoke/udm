@@ -1,71 +1,100 @@
+// Protocol Buffer service definition for the UDM gRPC API.
+//
+// This service provides comprehensive management of the Universal
+// Drink Machine, including CRUD operations for fluid regulators,
+// recipes, instructions, and ingredients.
+
 syntax = "proto3";
 package server;
 
 import "service.proto";
 
+// UdmService is the main gRPC service for the Universal Drink
+// Machine system.
 service UdmService {
+  // Adds a new fluid regulator to the system.
   rpc AddFluidRegulator(service_types.AddFluidRegulatorRequest)
       returns (service_types.AddFluidRegulatorResponse);
-  
+
+  // Removes an existing fluid regulator from the system.
   rpc RemoveFluidRegulator(service_types.RemoveFluidRegulatorRequest)
       returns (service_types.GenericRemovalResponse);
 
+  // Updates an existing fluid regulator's configuration.
   rpc UpdateFluidRegulator(service_types.ModifyFluidRegulatorRequest)
       returns (service_types.ModifyFluidRegulatorResponse);
-    
+
+  // Retrieves fluid regulators matching query criteria.
   rpc CollectFluidRegulators(service_types.CollectFluidRegulatorsRequest)
       returns (service_types.CollectFluidRegulatorsResponse);
 
-  rpc AddRecipe(service_types.AddRecipeRequest) 
+  // Adds a new recipe to the system.
+  rpc AddRecipe(service_types.AddRecipeRequest)
       returns (service_types.AddRecipeResponse);
 
-  rpc CollectRecipe(service_types.CollectRecipeRequest) 
+  // Retrieves recipes matching query criteria.
+  rpc CollectRecipe(service_types.CollectRecipeRequest)
       returns (service_types.CollectRecipeResponse);
 
+  // Removes an existing recipe from the system.
   rpc RemoveRecipe(service_types.RemoveRecipeRequest)
       returns (service_types.GenericRemovalResponse);
 
+  // Updates an existing recipe's configuration.
   rpc UpdateRecipe(service_types.ModifyRecipeRequest)
       returns (service_types.ModifyRecipeResponse);
-  
-  rpc AddRecipeInstructionOrder(service_types.AddRecipeInstOrderRequest) 
+
+  // Adds new recipe instruction orderings.
+  rpc AddRecipeInstructionOrder(service_types.AddRecipeInstOrderRequest)
       returns (service_types.AddRecipeInstOrderResponse);
 
+  // Retrieves recipe instruction orderings matching query criteria.
   // protolint:disable MAX_LINE_LENGTH
-  rpc CollectRecipeInstructionOrder(service_types.CollectRecipeInstOrderRequest) 
+  rpc CollectRecipeInstructionOrder(service_types.CollectRecipeInstOrderRequest)
       returns (service_types.CollectRecipeInstOrderResponse);
 
+  // Removes a recipe instruction ordering from the system.
   rpc RemoveRecipeInstructionOrder(service_types.RemoveRecipeInstOrderRequest)
       returns (service_types.GenericRemovalResponse);
 
+  // Updates the instruction ordering for a recipe.
   rpc UpdateRecipeInstructionOrder(service_types.UpdateRecipeInstOrderRequest)
       returns (service_types.GenericEmpty);
 
+  // Adds a new instruction to the system.
   rpc AddInstruction(service_types.AddInstructionRequest)
       returns (service_types.AddInstructionResponse);
-    
+
+  // Retrieves instructions matching query criteria.
   rpc CollectInstructions(service_types.CollectInstructionRequest)
       returns (service_types.CollectInstructionResponse);
 
+  // Removes an existing instruction from the system.
   rpc RemoveInstruction(service_types.RemoveInstructionRequest)
       returns (service_types.GenericRemovalResponse);
 
+  // Updates an existing instruction's configuration.
   rpc UpdateInstruction(service_types.ModifyInstructionRequest)
       returns (service_types.ModifyInstructionResponse);
-    
+
+  // Adds a new ingredient to the system.
   rpc AddIngredient(service_types.AddIngredientRequest)
       returns (service_types.AddIngredientResponse);
-  
+
+  // Retrieves ingredients matching query criteria.
   rpc CollectIngredients(service_types.CollectIngredientRequest)
       returns (service_types.CollectIngredientResponse);
 
+  // Removes an existing ingredient from the system.
   rpc RemoveIngredient(service_types.RemoveIngredientRequest)
       returns (service_types.GenericRemovalResponse);
-    
+
+  // Updates an existing ingredient's configuration.
   rpc UpdateIngredient(service_types.ModifyIngredientRequest)
       returns (service_types.ModifyIngredientResponse);
-      
+
+  // Resets database tables for specified entity types.
   rpc ResetDb(service_types.ResetRequest)
       returns (service_types.ResetResponse);
-  
+
 }

@@ -1,3 +1,9 @@
+// Protocol Buffer definition for the Drink Controller Service.
+//
+// This service provides RPC methods for controlling a drink dispensing system,
+// including drink dispensing, cleaning cycles, GPIO pump control, emergency
+// shutdown, and status polling.
+
 syntax = "proto3";
 package drink_ctrl_server;
 
@@ -5,19 +11,33 @@ import "drink_controller.proto";
 import "fhs.proto";
 import "service.proto";
 
+// DrinkControllerService provides remote procedure calls for managing
+// a drink dispensing and control system.
 service DrinkControllerService {
+  // Dispenses a drink according to the specified request parameters.
+  // This method controls the pumps and fluid regulators to dispense
+  // the requested beverage.
   rpc DispenseDrink(drink_ctrl_types.DispenseDrinkRequest)
     returns (drink_ctrl_types.DispenseDrinkResponse);
-  
+
+  // Initiates a cleaning cycle for the drink dispensing system.
+  // This method runs maintenance routines to clean the pumps,
+  // lines, and other components.
   rpc CleanCycle(drink_ctrl_types.CleanCycleRequest)
     returns (drink_ctrl_types.CleanCycleResponse);
-  
+
+  // Retrieves GPIO (General Purpose Input/Output) information for the pumps.
+  // Returns the current configuration and state of the pump GPIO pins.
   rpc GetPumpGpioInfo(drink_ctrl_types.GetPumpGpioInfoRequest)
     returns (drink_ctrl_types.GetPumpGpioInfoResponse);
 
+  // Performs an emergency stop of the specified fluid regulator.
+  // This method immediately halts all operations for safety purposes.
   rpc StopEmergency(fhs_types.FluidRegulator)
    returns (service_types.GenericEmpty);
 
+  // Polls the current status of the drink dispensing stream.
+  // This method provides real-time updates on the dispensing operation.
   rpc PollDrinkStream(drink_ctrl_types.PollDrinkStreamRequest)
    returns (drink_ctrl_types.PollDrinkStreamResponse);
 }

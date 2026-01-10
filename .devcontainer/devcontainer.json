@@ -25,7 +25,8 @@
 				"timonwong.shellcheck",
 				"qwtel.sqlite-viewer",
 				"cweijan.vscode-postgresql-client2",
-				"anthropic.claude-code"
+				"anthropic.claude-code",
+				"drblury.protobuf-vsc"
 			],
 			"settings": {
 				"rust-analyzer.cargo.buildScripts.enable": true,

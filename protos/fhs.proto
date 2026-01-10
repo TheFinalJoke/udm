@@ -1,12 +1,22 @@
+// Protocol Buffer definitions for Fluid Handling System (FHS) types.
+//
+// This file defines the types used to represent and control
+// fluid regulators such as valves, pumps, and taps.
+
 syntax = "proto3";
 package fhs_types;
 
+// RegulatorType defines the different kinds of fluid control
+// mechanisms available in the system.
 enum RegulatorType {
   REGULATOR_TYPE_UNSPECIFIED = 0;
   REGULATOR_TYPE_VALVE = 1;
   REGULATOR_TYPE_PUMP = 2;
   REGULATOR_TYPE_TAP = 3;
 }
+
+// FluidRegulator represents a device that controls fluid flow,
+// including its hardware configuration and identification.
 message FluidRegulator {
   optional int32 fr_id = 1;
   optional int32 gpio_pin = 2;
