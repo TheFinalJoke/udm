@@ -32,12 +32,11 @@ use crate::rpc_types::service_types::GenericEmpty;
 use crate::rpc_types::service_types::Operation;
 use crate::rpc_types::service_types::ServiceResponse;
 use crate::rpc_types::SqlUdmServerBuilder;
-use crate::system::gpio::PollGpio;
+// use crate::system::gpio::PollGpio;
 // use crate::system::gpio::PollSysDevice;
 use crate::rpc_types::server::udm_service_client::UdmServiceClient;
 use crate::UdmResult;
 use futures::stream::StreamExt;
-use rppal::gpio::Gpio;
 use signal_hook_tokio::SignalsInfo;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -194,11 +193,7 @@ impl DrinkControllerService for DrinkControllerContext {
         let pin = result.get_ref().fluids[0]
             .gpio_pin
             .ok_or(Status::invalid_argument("Missing Gpio Pin".to_string()))?;
-        let poll = PollGpio::new(
-            Gpio::new().map_err(|e| Status::aborted(e.to_string()))?,
-            pin.try_into().unwrap(),
-        )
-        .unwrap();
+        let poll = PollGpio::new(pin.try_into().unwrap()).unwrap();
         if let Some(pin_info) = poll.pin_info {
             Ok(GetPumpGpioInfoResponse::builder()
                 .metadata(

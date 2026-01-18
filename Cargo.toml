@@ -52,9 +52,9 @@ futures = "0.3"
 num_cpus = "1.17"
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
-rppal = "0.18"
 uuid = { version = "1.19", features = ["v4", "fast-rng", "macro-diagnostics"] }
 bon = "3.8"
+gpiocdev = "0.8.0"
 
 [build-dependencies]
 tonic-build = "0.12"
