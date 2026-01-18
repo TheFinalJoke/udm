@@ -7,16 +7,10 @@
 	"remoteUser": "root",
 	"features": {
 		"ghcr.io/devcontainers/features/rust:1": {},
-		"ghcr.io/devcontainers-extra/features/apt-packages:1": {},
-		"ghcr.io/devcontainers-extra/features/curl-apt-get:1": {},
-		"ghcr.io/devcontainers-extra/features/gh-cli:1": {},
-		"ghcr.io/devcontainers-extra/features/actionlint:1": {},
-		"ghcr.io/devcontainers-extra/features/actions-runner:1": {},
 		"ghcr.io/robbert229/devcontainer-features/postgresql-client:1": {},
-		"ghcr.io/devcontainers-extra/features/act-asdf:2": {},
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
 	},
-	"postCreateCommand": "apt update && apt install -y protobuf-compiler libprotobuf-dev shellcheck && bash scripts/install_protolint.sh && apt update && apt upgrade -y",
+	"postCreateCommand": "bash .devcontainer/run_post_command.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [

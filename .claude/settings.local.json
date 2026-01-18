@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(cargo update:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }

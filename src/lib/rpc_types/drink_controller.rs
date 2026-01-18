@@ -193,24 +193,25 @@ impl DrinkControllerService for DrinkControllerContext {
         let pin = result.get_ref().fluids[0]
             .gpio_pin
             .ok_or(Status::invalid_argument("Missing Gpio Pin".to_string()))?;
-        let poll = PollGpio::new(pin.try_into().unwrap()).unwrap();
-        if let Some(pin_info) = poll.pin_info {
-            Ok(GetPumpGpioInfoResponse::builder()
-                .metadata(
-                    GpioMetadata::builder()
-                        .direction(GpioDirection::from(pin_info.mode()).into())
-                        .state(GpioState::from(pin_info.read()).into())
-                        .build(),
-                )
-                .id(uuid.to_string())
-                .build()
-                .to_response())
-        } else {
-            Ok(GetPumpGpioInfoResponse::builder()
-                .id(uuid.to_string())
-                .build()
-                .to_response())
-        }
+        // let poll = PollGpio::new(pin.try_into().unwrap()).unwrap();
+        // if let Some(pin_info) = poll.pin_info {
+        //     Ok(GetPumpGpioInfoResponse::builder()
+        //         .metadata(
+        //             GpioMetadata::builder()
+        //                 .direction(GpioDirection::from(pin_info.mode()).into())
+        //                 .state(GpioState::from(pin_info.read()).into())
+        //                 .build(),
+        //         )
+        //         .id(uuid.to_string())
+        //         .build()
+        //         .to_response())
+        // } else {
+        //     Ok(GetPumpGpioInfoResponse::builder()
+        //         .id(uuid.to_string())
+        //         .build()
+        //         .to_response())
+        // }
+        todo!()
     }
     async fn stop_emergency(
         &self,

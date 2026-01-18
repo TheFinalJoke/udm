@@ -723,7 +723,10 @@ impl SqlTableTransactionsFactory for RecipeSchema {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests;
+
+#[cfg(test)]
+mod basic_tests {
     use super::*;
 
     #[test]

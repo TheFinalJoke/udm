@@ -184,3 +184,6 @@ impl UdmLogger {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
