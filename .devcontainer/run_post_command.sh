@@ -22,6 +22,10 @@ echo "Installing actionlint..."
 curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
 sudo mv actionlint /usr/local/bin/
 
+# Install Gpiod for GPIO access
+echo "Installing Gpiod..."
+apt install -y gpiod libgpiod-dev
+
 # Conditionally install GitHub Actions Runner based on architecture
 ARCH=$(uname -m)
 echo "Detected architecture: $ARCH"

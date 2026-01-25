@@ -131,6 +131,7 @@ impl TryFrom<Row> for Ingredient {
                         gpio_pin: None,
                         regulator_type: None,
                         pump_num: None,
+                        gpio_name: None,
                     })
                 })
             },
@@ -182,7 +183,7 @@ impl GenQueries for Ingredient {
             self.is_active.into(),
             self.ingredient_type.into(),
         ];
-        if let Some(fr) = self.regulator {
+        if let Some(fr) = &self.regulator {
             if let Some(id) = fr.fr_id {
                 columns.push(IngredientSchema::FrId);
                 values.push(id.into());
@@ -220,7 +221,7 @@ impl GenQueries for Ingredient {
                 self.ingredient_type.into(),
             ),
         ];
-        if let Some(fr) = self.regulator {
+        if let Some(fr) = &self.regulator {
             if let Some(id) = fr.fr_id {
                 values.push((IngredientSchema::FrId, id.into()));
             }

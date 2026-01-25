@@ -13,3 +13,4 @@ db_port=5432
 
 [drink_controller]
 port = 53049
+gpio_char_path = "/dev/gpiochip4" 

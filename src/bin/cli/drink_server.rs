@@ -31,6 +31,8 @@ pub struct CollectPumpInfoArgs {
     pub pump_number: Option<i32>,
     #[arg(short = 'g', long, help = "Gpio Pin to Collect", exclusive = true)]
     pub gpio_pin: Option<i32>,
+    #[arg(short = 'a', long, help = "Gpio Line to Collect", exclusive = true)]
+    pub gpio_name: Option<String>,
 }
 
 #[async_trait]
@@ -39,7 +41,9 @@ impl MainCommandHandler for CollectPumpInfoArgs {
         let fr = FluidRegulator::builder()
             .pump_num(self.pump_number.unwrap_or(0))
             .gpio_pin(self.gpio_pin.unwrap_or(0))
+            .gpio_name(self.gpio_name.clone().unwrap_or_default())
             .build();
+        dbg!(&fr);
         let req = GetPumpGpioInfoRequest::builder().fr(fr).build();
         tracing::info!("Collected Request {:?}", req);
         let mut open_connection = options.connect_to_drink_server().await?; // How do i open up a a drink controller

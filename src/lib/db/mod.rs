@@ -125,6 +125,7 @@ pub enum FluidRegulationSchema {
     GpioPin,
     RegulatorType,
     PumpNum,
+    GpioName,
 }
 impl SqlTransactionsFactory for FluidRegulationSchema {
     fn column_to_str(&self) -> &'static str {
@@ -134,6 +135,7 @@ impl SqlTransactionsFactory for FluidRegulationSchema {
             Self::GpioPin => "gpio_pin",
             Self::RegulatorType => "regulator_type",
             Self::PumpNum => "pump_num",
+            Self::GpioName => "gpio_name",
         }
     }
     fn from_str(value: &'static str) -> Option<Self> {
@@ -143,6 +145,7 @@ impl SqlTransactionsFactory for FluidRegulationSchema {
             "gpio_pin" => Some(FluidRegulationSchema::GpioPin),
             "regulator_type" => Some(FluidRegulationSchema::RegulatorType),
             "pump_num" => Some(FluidRegulationSchema::PumpNum),
+            "gpio_name" => Some(FluidRegulationSchema::GpioName),
             _ => None,
         }
     }
@@ -157,6 +160,7 @@ impl Display for FluidRegulationSchema {
         gpio_pin: int\n\
         regulator_type: {:?}\n\
         pump_num: int
+        gpio_name: varchar
         ",
             RegulatorType::get_possible_values()
         )
@@ -177,6 +181,7 @@ impl SqlTableTransactionsFactory for FluidRegulationSchema {
             .col(ColumnDef::new(Self::RegulatorType).integer().not_null())
             .col(ColumnDef::new(Self::GpioPin).integer())
             .col(ColumnDef::new(Self::PumpNum).integer().null())
+            .col(ColumnDef::new(Self::GpioName).string().null())
             .build(builder)
     }
 
@@ -200,6 +205,7 @@ impl TryFrom<String> for FluidRegulationSchema {
             "gpio_pin" => Ok(FluidRegulationSchema::GpioPin),
             "regulator_type" => Ok(FluidRegulationSchema::RegulatorType),
             "pump_num" => Ok(FluidRegulationSchema::PumpNum),
+            "gpio_name" => Ok(FluidRegulationSchema::GpioName),
             _ => Err(trace_log_error(trace_log_error(UdmError::ApiFailure(
                 "Failed to collect Column".to_string(),
             )))),

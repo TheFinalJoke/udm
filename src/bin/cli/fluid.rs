@@ -64,7 +64,7 @@ pub struct AddFluidArgs {
     #[arg(
         short = 'g',
         long = "gpio_pin",
-        help = "The GPIO pin the device is connected"
+        help = "The GPIO pin the device is connected. This is the BCM"
     )]
     gpio_pin: Option<i32>,
     #[arg(
@@ -73,6 +73,9 @@ pub struct AddFluidArgs {
         help = "The pump number associated to it"
     )]
     pump_num: Option<i32>,
+
+    #[arg(short = 'a', long = "gpio_name", help = "GPIO Name or Line")]
+    gpio_name: Option<String>,
 }
 impl UdmGrpcActions<FluidRegulator> for AddFluidArgs {
     fn sanatize_input(&self) -> UdmResult<FluidRegulator> {
@@ -84,21 +87,29 @@ impl UdmGrpcActions<FluidRegulator> for AddFluidArgs {
             fluid.validate_without_id_fields()?;
             return Ok(fluid);
         }
-        if self.reg_type.is_none() || self.gpio_pin.is_none() {
+        if self.reg_type.is_none() || (self.gpio_pin.is_none() && self.gpio_name.is_none()) {
             return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
             ))));
         }
-        Ok(FluidRegulator::builder()
+        let fr = FluidRegulator::builder()
             .fr_id(self.fr_id.unwrap_or_default())
             .regulator_type(
-                RegulatorType::from_str_name(self.reg_type.clone().unwrap().as_str())
+                RegulatorType::from_str_name(self.reg_type.as_deref().unwrap())
                     .unwrap()
                     .into(),
             )
             .gpio_pin(self.gpio_pin.unwrap_or_default())
             .pump_num(self.pump_num.unwrap_or_default())
-            .build())
+            .gpio_name(
+                self.gpio_name
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+            .build();
+        tracing::debug!("{fr:?}");
+        Ok(fr)
     }
 }
 #[async_trait]
@@ -142,6 +153,8 @@ pub struct UpdateFluidArgs {
         help = "The pump number associated to it"
     )]
     pump_num: Option<i32>,
+    #[arg(short = 'a', long = "gpio_name", help = "GPIO Name or Line")]
+    gpio_name: Option<String>,
 }
 impl UdmGrpcActions<FluidRegulator> for UpdateFluidArgs {
     fn sanatize_input(&self) -> UdmResult<FluidRegulator> {
@@ -153,7 +166,10 @@ impl UdmGrpcActions<FluidRegulator> for UpdateFluidArgs {
             fluid.validate_all_fields()?;
             return Ok(fluid);
         }
-        if self.fr_id.is_none() || self.reg_type.is_none() || self.gpio_pin.is_none() {
+        if self.fr_id.is_none()
+            || self.reg_type.is_none()
+            || (self.gpio_pin.is_none() && self.gpio_name.is_none())
+        {
             return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
             ))));
@@ -161,12 +177,18 @@ impl UdmGrpcActions<FluidRegulator> for UpdateFluidArgs {
         Ok(FluidRegulator::builder()
             .fr_id(self.fr_id.unwrap_or_default())
             .regulator_type(
-                RegulatorType::from_str_name(self.reg_type.clone().unwrap().as_str())
+                RegulatorType::from_str_name(self.reg_type.as_deref().unwrap())
                     .unwrap()
                     .into(),
             )
             .gpio_pin(self.gpio_pin.unwrap_or_default())
             .pump_num(self.pump_num.unwrap_or_default())
+            .gpio_name(
+                self.gpio_name
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
             .build())
     }
 }
@@ -255,6 +277,10 @@ impl ShowHandler<FluidRegulator> for ShowFluidArgs {
                 Some(pin) => format!("{pin}"),
                 None => "Not Set".to_string(),
             };
+            let gpio_name: String = match &fluid.gpio_name {
+                Some(name) => name.to_string(),
+                None => "Not Set".to_string(),
+            };
             let reg = match fluid.regulator_type {
                 Some(reg) => RegulatorType::try_from(reg)
                     .unwrap_or(RegulatorType::Unspecified)
@@ -262,13 +288,19 @@ impl ShowHandler<FluidRegulator> for ShowFluidArgs {
                     .to_string(),
                 None => "Not Set".to_string(),
             };
-            table.push(vec![fr_id.cell(), gpio_pin.cell(), reg.cell()]);
+            table.push(vec![
+                fr_id.cell(),
+                gpio_pin.cell(),
+                gpio_name.cell(),
+                reg.cell(),
+            ]);
         }
         table
             .table()
             .title(vec![
                 "ID".cell().bold(true),
                 "Gpio Pin".cell().bold(true),
+                "Gpio Name".cell().bold(true),
                 "Regulator Type".cell().bold(true),
             ])
             .bold(true)
@@ -341,6 +373,7 @@ mod tests {
             .gpio_pin(12)
             .pump_num(0)
             .fr_id(0)
+            .gpio_name(String::new())
             .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
@@ -370,6 +403,7 @@ mod tests {
             .regulator_type(RegulatorType::Valve.into())
             .gpio_pin(12)
             .pump_num(0)
+            .gpio_name(String::new())
             .build();
         assert_eq!(fr.unwrap(), expected_result)
     }

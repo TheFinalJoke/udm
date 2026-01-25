@@ -32,9 +32,10 @@ use crate::rpc_types::service_types::GenericEmpty;
 use crate::rpc_types::service_types::Operation;
 use crate::rpc_types::service_types::ServiceResponse;
 use crate::rpc_types::SqlUdmServerBuilder;
-// use crate::system::gpio::PollGpio;
 // use crate::system::gpio::PollSysDevice;
 use crate::rpc_types::server::udm_service_client::UdmServiceClient;
+use crate::system::gpio::GpioCollection;
+use crate::system::gpio::GpioLineType;
 use crate::UdmResult;
 use futures::stream::StreamExt;
 use signal_hook_tokio::SignalsInfo;
@@ -53,6 +54,7 @@ pub struct DrinkControllerContext {
     pub addr: SocketAddr,
     pub metadata: DbMetaData,
     pub(crate) sql_udm_client: Option<UdmServiceClient<Channel>>,
+    pub(crate) gpio_chip_path: String,
 }
 impl DrinkControllerContext {
     pub fn new(
@@ -60,12 +62,14 @@ impl DrinkControllerContext {
         addr: SocketAddr,
         metadata: DbMetaData,
         sql_udm_client: Option<UdmServiceClient<Channel>>,
+        gpio_chip_path: String,
     ) -> Self {
         Self {
             connection,
             addr,
             metadata,
             sql_udm_client,
+            gpio_chip_path,
         }
     }
 }
@@ -81,7 +85,7 @@ impl DrinkControllerServer {
         }
     }
 }
-#[async_trait::async_trait]
+#[async_trait]
 impl GrpcServerFactory<DrinkControllerContext> for DrinkControllerServer {
     async fn build_context(&self) -> DrinkControllerContext {
         let db_type = Arc::new(DbType::load_db(Arc::clone(&self.configuration)));
@@ -102,6 +106,7 @@ impl GrpcServerFactory<DrinkControllerContext> for DrinkControllerServer {
             self.addr,
             db_metadata,
             sql_udm_options.connect().await.ok(),
+            self.configuration.drink_controller.gpio_char_path.clone(),
         )
     }
     async fn start_server(&self) -> UdmResult<()> {
@@ -129,6 +134,7 @@ impl GrpcServerFactory<DrinkControllerContext> for DrinkControllerServer {
     }
 }
 
+// Need to figure out locking
 #[async_trait]
 impl DrinkControllerService for DrinkControllerContext {
     async fn dispense_drink(
@@ -157,6 +163,7 @@ impl DrinkControllerService for DrinkControllerContext {
         let fr = request
             .get_ref()
             .fr
+            .clone()
             .ok_or(trace_log_error(Status::invalid_argument(
                 "Missing Fluid regulator".to_string(),
             )))?;
@@ -190,28 +197,27 @@ impl DrinkControllerService for DrinkControllerContext {
                 "Returned no data or too much data {result:?}"
             )));
         }
-        let pin = result.get_ref().fluids[0]
-            .gpio_pin
-            .ok_or(Status::invalid_argument("Missing Gpio Pin".to_string()))?;
-        // let poll = PollGpio::new(pin.try_into().unwrap()).unwrap();
-        // if let Some(pin_info) = poll.pin_info {
-        //     Ok(GetPumpGpioInfoResponse::builder()
-        //         .metadata(
-        //             GpioMetadata::builder()
-        //                 .direction(GpioDirection::from(pin_info.mode()).into())
-        //                 .state(GpioState::from(pin_info.read()).into())
-        //                 .build(),
-        //         )
-        //         .id(uuid.to_string())
-        //         .build()
-        //         .to_response())
-        // } else {
-        //     Ok(GetPumpGpioInfoResponse::builder()
-        //         .id(uuid.to_string())
-        //         .build()
-        //         .to_response())
-        // }
-        todo!()
+        let line = GpioLineType::try_from(result.get_ref().fluids[0].clone()).map_err(|e| {
+            Status::internal(format!("Failed to get GPIO line from fluid regulator: {e}"))
+        })?;
+
+        let mut gpio_collection = GpioCollection::new(line, self.gpio_chip_path.clone());
+        gpio_collection.poll().map_err(|e| {
+            Status::internal(format!(
+                "Failed to poll GPIO line from fluid regulator: {e}"
+            ))
+        })?;
+        Ok(GetPumpGpioInfoResponse::builder()
+            .metadata(
+                gpio_collection
+                    .metadata
+                    .ok_or(trace_log_error(Status::internal(
+                        "Failed to get GPIO metadata".to_string(),
+                    )))?,
+            )
+            .id(uuid.to_string())
+            .build()
+            .to_response())
     }
     async fn stop_emergency(
         &self,
