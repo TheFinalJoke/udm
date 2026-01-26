@@ -1,5 +1,6 @@
 use crate::db::executor::GenQueries;
 use crate::db::FluidRegulationSchema;
+use crate::error::trace_log_error;
 use crate::error::UdmError;
 use crate::rpc_types::FieldValidation;
 use crate::rpc_types::MultipleValues;
@@ -24,8 +25,15 @@ impl GenQueries for FluidRegulator {
             .columns([
                 FluidRegulationSchema::GpioPin,
                 FluidRegulationSchema::RegulatorType,
+                FluidRegulationSchema::PumpNum,
+                FluidRegulationSchema::GpioName,
             ])
-            .values_panic([self.gpio_pin.into(), self.regulator_type.into()])
+            .values_panic([
+                self.gpio_pin.into(),
+                self.regulator_type.into(),
+                self.pump_num.into(),
+                self.gpio_name.as_deref().into(),
+            ])
             .returning(Query::returning().column(FluidRegulationSchema::FrId))
             .to_owned()
     }
@@ -44,6 +52,8 @@ impl GenQueries for FluidRegulator {
                     FluidRegulationSchema::RegulatorType,
                     self.regulator_type.into(),
                 ),
+                (FluidRegulationSchema::PumpNum, self.pump_num.into()),
+                (FluidRegulationSchema::GpioName, self.gpio_name.as_deref().into()),
             ])
             .and_where(Expr::col(FluidRegulationSchema::FrId).eq(self.fr_id))
             .returning(Query::returning().column(FluidRegulationSchema::FrId))
@@ -54,17 +64,17 @@ impl GenQueries for FluidRegulator {
 impl FieldValidation for FluidRegulator {
     fn validate_all_fields(&self) -> UdmResult<()> {
         if self.fr_id.is_none() || self.regulator_type.is_none() || self.gpio_pin.is_none() {
-            return Err(UdmError::InvalidInput(String::from(
+            return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
-            )));
+            ))));
         }
         Ok(())
     }
     fn validate_without_id_fields(&self) -> UdmResult<()> {
         if self.regulator_type.is_none() || self.gpio_pin.is_none() {
-            return Err(UdmError::InvalidInput(String::from(
+            return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
-            )));
+            ))));
         }
         Ok(())
     }
@@ -78,6 +88,7 @@ impl TryFrom<Row> for FluidRegulator {
             regulator_type: value.try_get(1)?,
             gpio_pin: value.try_get(2)?,
             pump_num: value.try_get(3)?,
+            gpio_name: value.try_get(4)?,
         })
     }
 }
@@ -94,7 +105,7 @@ impl MultipleValues for RegulatorType {
 }
 impl Display for RegulatorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -106,14 +117,15 @@ mod tests {
 
     #[test]
     fn test_gen_insert_query() {
-        let fr = FluidRegulator {
-            fr_id: Some(1),
-            gpio_pin: Some(23),
-            regulator_type: Some(RegulatorType::Tap.into()),
-            pump_num: Some(2),
-        };
+        let fr = FluidRegulator::builder()
+            .gpio_pin(23)
+            .regulator_type(RegulatorType::Tap.into())
+            .pump_num(2)
+            .gpio_name("GPIO23".to_string())
+            .build();
+
         let query = fr.gen_insert_query().to_string(PostgresQueryBuilder);
-        let expected_query = r#"INSERT INTO "FluidRegulation" ("gpio_pin", "regulator_type") VALUES (23, 3) RETURNING "fr_id""#.to_string();
+        let expected_query = r#"INSERT INTO "FluidRegulation" ("gpio_pin", "regulator_type", "pump_num", "gpio_name") VALUES (23, 3, 2, 'GPIO23') RETURNING "fr_id""#.to_string();
         assert_eq!(query, expected_query)
     }
 
@@ -127,14 +139,15 @@ mod tests {
 
     #[test]
     fn test_gen_update_query() {
-        let fr = FluidRegulator {
-            fr_id: Some(1),
-            gpio_pin: Some(23),
-            regulator_type: Some(RegulatorType::Tap.into()),
-            pump_num: Some(0),
-        };
+        let fr = FluidRegulator::builder()
+            .fr_id(1)
+            .gpio_pin(23)
+            .regulator_type(RegulatorType::Tap.into())
+            .pump_num(0)
+            .gpio_name("GPIO23".to_string())
+            .build();
         let query = fr.gen_update_query().to_string(PostgresQueryBuilder);
-        let expected_query = r#"UPDATE "FluidRegulation" SET "gpio_pin" = 23, "regulator_type" = 3 WHERE "fr_id" = 1 RETURNING "fr_id""#.to_string();
+        let expected_query = r#"UPDATE "FluidRegulation" SET "gpio_pin" = 23, "regulator_type" = 3, "pump_num" = 0, "gpio_name" = 'GPIO23' WHERE "fr_id" = 1 RETURNING "fr_id""#.to_string();
         assert_eq!(query, expected_query)
     }
 }

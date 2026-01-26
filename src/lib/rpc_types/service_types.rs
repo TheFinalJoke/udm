@@ -1,25 +1,26 @@
-use crate::db::FluidRegulationSchema;
-use crate::db::IngredientSchema;
-use crate::db::InstructionSchema;
-use crate::db::InstructionToRecipeSchema;
-use crate::db::RecipeSchema;
-use crate::error::UdmError;
-use crate::UdmResult;
-use anyhow::Error as AnyError;
-use regex::Regex;
-use sea_query::Expr;
-use sea_query::SimpleExpr;
-use tonic::Response;
-use tracing::debug;
-
 use super::drink_ctrl_types::CleanCycleRequest;
 use super::drink_ctrl_types::CleanCycleResponse;
 use super::drink_ctrl_types::DispenseDrinkRequest;
 use super::drink_ctrl_types::DispenseDrinkResponse;
 use super::drink_ctrl_types::GetPumpGpioInfoRequest;
 use super::drink_ctrl_types::GetPumpGpioInfoResponse;
+use crate::db::FluidRegulationSchema;
+use crate::db::IngredientSchema;
+use crate::db::InstructionSchema;
+use crate::db::InstructionToRecipeSchema;
+use crate::db::RecipeSchema;
+use crate::error::trace_log_error;
+use crate::error::UdmError;
 use crate::rpc_types::drink_ctrl_types::PollDrinkStreamRequest;
 use crate::rpc_types::drink_ctrl_types::PollDrinkStreamResponse;
+use crate::UdmResult;
+use anyhow::Error as AnyError;
+use regex::Regex;
+use sea_query::Expr;
+use sea_query::SimpleExpr;
+use std::fmt::Display;
+use tonic::Response;
+use tracing::debug;
 tonic::include_proto!("service_types");
 
 pub trait ServiceRequest {}
@@ -110,12 +111,14 @@ impl FetchData {
     }
     pub fn to_simple_expr<T: sea_query::Iden + 'static>(&self, column: T) -> UdmResult<SimpleExpr> {
         let vals = self.values.to_owned();
-        match Operation::try_from(self.operation)
-            .map_err(|_| UdmError::InvalidInput("Could not parse the operation".to_string()))?
-        {
-            Operation::Unspecified => {
-                Err(UdmError::ApiFailure("Operation not specified".to_string()))
-            }
+        match Operation::try_from(self.operation).map_err(|_| {
+            trace_log_error(UdmError::InvalidInput(
+                "Could not parse the operation".to_string(),
+            ))
+        })? {
+            Operation::Unspecified => Err(trace_log_error(UdmError::ApiFailure(
+                "Operation not specified".to_string(),
+            ))),
             Operation::Equal => Ok(Expr::col(column).eq(vals)),
             Operation::NotEqual => Ok(Expr::col(column).ne(vals)),
             Operation::In => Ok(Expr::col(column).is_in(vec![vals])),
@@ -232,7 +235,7 @@ impl Operation {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, bon::Builder)]
 pub(crate) struct InstructionToRecipeMetadata {
     pub(crate) id: Option<i32>,
     pub(crate) recipe_id: i32,
@@ -260,5 +263,29 @@ impl TryFrom<InstructionToRecipeMetadata> for RecipeInstructionOrder {
             instruction_id: value.instruction_id,
             position: value.instruction_order,
         })
+    }
+}
+
+// Displays for Responses
+impl Display for GetPumpGpioInfoResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.metadata.is_none() {
+            let data = "ID: Unknown, \n\
+    State: Unknown \n\
+    Direction: Unknown\n\
+    Value: Unknown"
+                .to_string();
+            write!(f, "{data}")
+        } else {
+            let metadata = self.metadata.as_ref().unwrap();
+            let data = format!(
+                "ID: {}, \n\
+    State: {} \n\
+    Direction {}\n\
+    Value: {:?}",
+                self.id, metadata.state, metadata.direction, metadata.value
+            );
+            write!(f, "{data}")
+        }
     }
 }

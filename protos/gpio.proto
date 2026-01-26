@@ -1,18 +1,29 @@
+// Protocol Buffer definitions for GPIO (General Purpose Input/Output)
+// pin control and status.
+//
+// This file defines types for managing GPIO pin states, directions,
+// and metadata used throughout the UDM system.
+
 syntax = "proto3";
 package gpio_types;
 
+// GpioState represents the electrical state of a GPIO pin.
 enum GpioState {
   GPIO_STATE_UNSPECIFIED = 0;
   GPIO_STATE_LOW = 1;
   GPIO_STATE_HIGH = 2;
 }
 
+// GpioDirection indicates whether a GPIO pin is configured
+// for input or output.
 enum GpioDirection {
   GPIO_DIRECTION_UNSPECIFIED = 0;
   GPIO_DIRECTION_OUT = 1;
   GPIO_DIRECTION_IN = 2;
 }
 
+// GpioValue holds a GPIO pin value, which can be represented
+// as either a string or integer.
 message GpioValue {
   oneof value {
     string str_val = 1;
@@ -20,6 +31,8 @@ message GpioValue {
   }
 }
 
+// GpioMetadata contains comprehensive information about a
+// GPIO pin's configuration and current state.
 message GpioMetadata {
   GpioState state = 1;
   GpioDirection direction = 2;

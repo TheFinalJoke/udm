@@ -10,6 +10,7 @@ use cli_table::Style;
 use cli_table::Table;
 use cli_table::TableStruct;
 use lib::db::FluidRegulationSchema;
+use lib::error::trace_log_error;
 use lib::error::UdmError;
 use lib::rpc_types::fhs_types::FluidRegulator;
 use lib::rpc_types::fhs_types::RegulatorType;
@@ -47,7 +48,7 @@ impl MainCommandHandler for FluidCommands {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddFluidArgs {
     #[arg(
         long,
@@ -63,7 +64,7 @@ pub struct AddFluidArgs {
     #[arg(
         short = 'g',
         long = "gpio_pin",
-        help = "The GPIO pin the device is connected"
+        help = "The GPIO pin the device is connected. This is the BCM"
     )]
     gpio_pin: Option<i32>,
     #[arg(
@@ -72,31 +73,43 @@ pub struct AddFluidArgs {
         help = "The pump number associated to it"
     )]
     pump_num: Option<i32>,
+
+    #[arg(short = 'a', long = "gpio_name", help = "GPIO Name or Line")]
+    gpio_name: Option<String>,
 }
 impl UdmGrpcActions<FluidRegulator> for AddFluidArgs {
     fn sanatize_input(&self) -> UdmResult<FluidRegulator> {
         if let Some(raw_input) = &self.raw {
             tracing::debug!("Json passed: {}", &raw_input);
-            let fluid: FluidRegulator = serde_json::from_str(raw_input)
-                .map_err(|_| UdmError::InvalidInput(String::from("Failed to parse json")))?;
+            let fluid: FluidRegulator = serde_json::from_str(raw_input).map_err(|_| {
+                trace_log_error(UdmError::InvalidInput(String::from("Failed to parse json")))
+            })?;
             fluid.validate_without_id_fields()?;
             return Ok(fluid);
         }
-        if self.reg_type.is_none() || self.gpio_pin.is_none() {
-            return Err(UdmError::InvalidInput(String::from(
+        if self.reg_type.is_none() || (self.gpio_pin.is_none() && self.gpio_name.is_none()) {
+            return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
-            )));
+            ))));
         }
-        Ok(FluidRegulator {
-            fr_id: self.fr_id,
-            regulator_type: Some(
-                RegulatorType::from_str_name(self.reg_type.clone().unwrap().as_str())
+        let fr = FluidRegulator::builder()
+            .fr_id(self.fr_id.unwrap_or_default())
+            .regulator_type(
+                RegulatorType::from_str_name(self.reg_type.as_deref().unwrap())
                     .unwrap()
                     .into(),
-            ),
-            gpio_pin: self.gpio_pin,
-            pump_num: self.pump_num,
-        })
+            )
+            .gpio_pin(self.gpio_pin.unwrap_or_default())
+            .pump_num(self.pump_num.unwrap_or_default())
+            .gpio_name(
+                self.gpio_name
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+            .build();
+        tracing::debug!("{fr:?}");
+        Ok(fr)
     }
 }
 #[async_trait]
@@ -106,11 +119,11 @@ impl MainCommandHandler for AddFluidArgs {
             tracing::error!("{}", e);
             std::process::exit(2)
         });
-        let mut open_connection = options.connect().await?;
+        let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_fluid_regulator(AddFluidRegulatorRequest { fluid: Some(fr) })
+            .add_fluid_regulator(AddFluidRegulatorRequest::builder().fluid(fr).build())
             .await
-            .map_err(|e| UdmError::ApiFailure(format!("{}", e)))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Inserted into database, got ID back {}",
@@ -120,7 +133,7 @@ impl MainCommandHandler for AddFluidArgs {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateFluidArgs {
     #[arg(long, value_name = "JSON", help = "Raw json to transform")]
     raw: Option<String>,
@@ -140,31 +153,43 @@ pub struct UpdateFluidArgs {
         help = "The pump number associated to it"
     )]
     pump_num: Option<i32>,
+    #[arg(short = 'a', long = "gpio_name", help = "GPIO Name or Line")]
+    gpio_name: Option<String>,
 }
 impl UdmGrpcActions<FluidRegulator> for UpdateFluidArgs {
     fn sanatize_input(&self) -> UdmResult<FluidRegulator> {
         if let Some(raw_input) = &self.raw {
             tracing::debug!("Json passed: {}", &raw_input);
-            let fluid: FluidRegulator = serde_json::from_str(raw_input)
-                .map_err(|_| UdmError::InvalidInput(String::from("Failed to parse json")))?;
+            let fluid: FluidRegulator = serde_json::from_str(raw_input).map_err(|_| {
+                trace_log_error(UdmError::InvalidInput(String::from("Failed to parse json")))
+            })?;
             fluid.validate_all_fields()?;
             return Ok(fluid);
         }
-        if self.fr_id.is_none() || self.reg_type.is_none() || self.gpio_pin.is_none() {
-            return Err(UdmError::InvalidInput(String::from(
+        if self.fr_id.is_none()
+            || self.reg_type.is_none()
+            || (self.gpio_pin.is_none() && self.gpio_name.is_none())
+        {
+            return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
-            )));
+            ))));
         }
-        Ok(FluidRegulator {
-            fr_id: self.fr_id,
-            regulator_type: Some(
-                RegulatorType::from_str_name(self.reg_type.clone().unwrap().as_str())
+        Ok(FluidRegulator::builder()
+            .fr_id(self.fr_id.unwrap_or_default())
+            .regulator_type(
+                RegulatorType::from_str_name(self.reg_type.as_deref().unwrap())
                     .unwrap()
                     .into(),
-            ),
-            gpio_pin: self.gpio_pin,
-            pump_num: self.pump_num,
-        })
+            )
+            .gpio_pin(self.gpio_pin.unwrap_or_default())
+            .pump_num(self.pump_num.unwrap_or_default())
+            .gpio_name(
+                self.gpio_name
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+            .build())
     }
 }
 #[async_trait]
@@ -174,11 +199,11 @@ impl MainCommandHandler for UpdateFluidArgs {
             tracing::error!("{}", e);
             std::process::exit(2)
         });
-        let mut open_connection = options.connect().await?;
+        let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_fluid_regulator(ModifyFluidRegulatorRequest { fluid: Some(fr) })
+            .update_fluid_regulator(ModifyFluidRegulatorRequest::builder().fluid(fr).build())
             .await
-            .map_err(|e| UdmError::ApiFailure(format!("{}", e)))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Updated database, got ID back {}",
@@ -187,7 +212,7 @@ impl MainCommandHandler for UpdateFluidArgs {
         Ok(())
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowFluidArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -206,13 +231,15 @@ impl MainCommandHandler for ShowFluidArgs {
             Ok(())
         } else {
             let fetched = self.sanatize_input()?;
-            let mut open_connection = options.connect().await?;
+            let mut open_connection = options.connect_to_udm().await?;
             let response = open_connection
-                .collect_fluid_regulators(CollectFluidRegulatorsRequest {
-                    expressions: fetched,
-                })
+                .collect_fluid_regulators(
+                    CollectFluidRegulatorsRequest::builder()
+                        .expressions(fetched)
+                        .build(),
+                )
                 .await
-                .map_err(|e| UdmError::ApiFailure(format!("{}", e)));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -223,7 +250,7 @@ impl MainCommandHandler for ShowFluidArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    println!("Error: Could not show FRs due to: {err}");
                     Ok(())
                 }
             }
@@ -243,11 +270,15 @@ impl ShowHandler<FluidRegulator> for ShowFluidArgs {
         let mut table = Vec::new();
         for fluid in data {
             let fr_id = match &fluid.fr_id {
-                Some(id) => format!("{}", id),
+                Some(id) => format!("{id}"),
                 None => "Not Set".to_string(),
             };
             let gpio_pin: String = match &fluid.gpio_pin {
-                Some(pin) => format!("{}", pin),
+                Some(pin) => format!("{pin}"),
+                None => "Not Set".to_string(),
+            };
+            let gpio_name: String = match &fluid.gpio_name {
+                Some(name) => name.to_string(),
                 None => "Not Set".to_string(),
             };
             let reg = match fluid.regulator_type {
@@ -257,13 +288,19 @@ impl ShowHandler<FluidRegulator> for ShowFluidArgs {
                     .to_string(),
                 None => "Not Set".to_string(),
             };
-            table.push(vec![fr_id.cell(), gpio_pin.cell(), reg.cell()]);
+            table.push(vec![
+                fr_id.cell(),
+                gpio_pin.cell(),
+                gpio_name.cell(),
+                reg.cell(),
+            ]);
         }
         table
             .table()
             .title(vec![
                 "ID".cell().bold(true),
                 "Gpio Pin".cell().bold(true),
+                "Gpio Name".cell().bold(true),
                 "Regulator Type".cell().bold(true),
             ])
             .bold(true)
@@ -278,7 +315,7 @@ impl ShowHandler<FluidRegulator> for ShowFluidArgs {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveFluidArgs {
     #[arg(short, long, help = "Remove fluid regulator by ID", required = true)]
     fr_id: Option<i32>,
@@ -294,13 +331,15 @@ pub struct RemoveFluidArgs {
 impl MainCommandHandler for RemoveFluidArgs {
     async fn handle_command(&self, options: UdmServerOptions) -> UdmResult<()> {
         let id = self.fr_id.ok_or_else(|| {
-            UdmError::InvalidInput("Invalid input to remove fluid regulator".to_string())
+            trace_log_error(UdmError::InvalidInput(
+                "Invalid input to remove fluid regulator".to_string(),
+            ))
         })?;
         if !self.yes {
             let _ = ensure_removal();
         }
-        let req = RemoveFluidRegulatorRequest { fr_id: id };
-        let mut open_conn = options.connect().await?;
+        let req = RemoveFluidRegulatorRequest::builder().fr_id(id).build();
+        let mut open_conn = options.connect_to_udm().await?;
         let response = open_conn.remove_fluid_regulator(req).await;
         tracing::debug!("Got response {:?}", response);
         match response {
@@ -323,87 +362,67 @@ mod tests {
 
     #[test]
     fn test_sanatize_add_input() {
-        let add_fluid = AddFluidArgs {
-            raw: None,
-            fr_id: None,
-            reg_type: Some("REGULATOR_TYPE_VALVE".to_string()),
-            gpio_pin: Some(12),
-            pump_num: Some(0),
-        };
+        let add_fluid = AddFluidArgs::builder()
+            .reg_type("REGULATOR_TYPE_VALVE".to_string())
+            .gpio_pin(12)
+            .build();
         let fr = add_fluid.sanatize_input();
-        let expected_result = FluidRegulator {
-            regulator_type: Some(RegulatorType::Valve.into()),
-            gpio_pin: Some(12),
-            ..Default::default()
-        };
+
+        let expected_result = FluidRegulator::builder()
+            .regulator_type(RegulatorType::Valve.into())
+            .gpio_pin(12)
+            .pump_num(0)
+            .fr_id(0)
+            .gpio_name(String::new())
+            .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
     #[test]
     fn test_sanatize_input_add_raw() {
         let raw = r#"{"fr_id": 1, "regulator_type": 1, "gpio_pin": 12}"#.to_string();
-        let add_fluid = AddFluidArgs {
-            raw: Some(raw),
-            fr_id: None,
-            reg_type: None,
-            gpio_pin: None,
-            pump_num: None,
-        };
+        let add_fluid = AddFluidArgs::builder().raw(raw).build();
         let fr = add_fluid.sanatize_input();
-        let expected_result = FluidRegulator {
-            fr_id: Some(1),
-            regulator_type: Some(RegulatorType::Valve.into()),
-            gpio_pin: Some(12),
-            pump_num: Some(0),
-        };
+        let expected_result = FluidRegulator::builder()
+            .fr_id(1)
+            .regulator_type(RegulatorType::Valve.into())
+            .gpio_pin(12)
+            .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
     #[test]
     fn test_sanatize_update_input() {
-        let update_fluid = UpdateFluidArgs {
-            raw: None,
-            fr_id: Some(1),
-            reg_type: Some("REGULATOR_TYPE_VALVE".to_string()),
-            gpio_pin: Some(12),
-            pump_num: Some(0),
-        };
+        let update_fluid = UpdateFluidArgs::builder()
+            .fr_id(1)
+            .reg_type("REGULATOR_TYPE_VALVE".to_string())
+            .gpio_pin(12)
+            .pump_num(0)
+            .build();
         let fr: UdmResult<FluidRegulator> = update_fluid.sanatize_input();
-        let expected_result = FluidRegulator {
-            fr_id: Some(1),
-            regulator_type: Some(RegulatorType::Valve.into()),
-            gpio_pin: Some(12),
-            pump_num: Some(0),
-        };
+        let expected_result = FluidRegulator::builder()
+            .fr_id(1)
+            .regulator_type(RegulatorType::Valve.into())
+            .gpio_pin(12)
+            .pump_num(0)
+            .gpio_name(String::new())
+            .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
     #[test]
     fn test_sanatize_input_update_raw() {
         let raw = r#"{"fr_id": 1, "regulator_type": 1, "gpio_pin": 12}"#.to_string();
-        let update_fluid = UpdateFluidArgs {
-            raw: Some(raw),
-            fr_id: None,
-            reg_type: None,
-            gpio_pin: None,
-            pump_num: None,
-        };
+        let update_fluid = UpdateFluidArgs::builder().raw(raw).build();
         let fr: UdmResult<FluidRegulator> = update_fluid.sanatize_input();
-        let expected_result = FluidRegulator {
-            fr_id: Some(1),
-            regulator_type: Some(RegulatorType::Valve.into()),
-            gpio_pin: Some(12),
-            pump_num: Some(0),
-        };
+        let expected_result = FluidRegulator::builder()
+            .fr_id(1)
+            .regulator_type(RegulatorType::Valve.into())
+            .gpio_pin(12)
+            .build();
         assert_eq!(fr.unwrap(), expected_result)
     }
     #[test]
     fn test_sanatize_input_add_raw_not_all_valued() {
         let raw = r#"{"gpio_pin": 12}"#.to_string();
-        let add_fluid = AddFluidArgs {
-            raw: Some(raw),
-            fr_id: None,
-            reg_type: None,
-            gpio_pin: None,
-            pump_num: None,
-        };
+        let add_fluid = AddFluidArgs::builder().raw(raw).build();
         let fr = add_fluid.sanatize_input();
         assert_eq!(
             fr.unwrap_err().to_string(),
@@ -412,26 +431,14 @@ mod tests {
     }
     #[test]
     fn test_sanatize_add_input_not_all_values() {
-        let add_fluid = AddFluidArgs {
-            raw: None,
-            fr_id: None,
-            reg_type: None,
-            gpio_pin: Some(12),
-            pump_num: None,
-        };
+        let add_fluid = AddFluidArgs::builder().gpio_pin(12).build();
         let fr = add_fluid.sanatize_input();
         assert!(fr.is_err())
     }
     #[test]
     fn test_sanatize_input_update_raw_not_all_valued() {
         let raw = r#"{"regulator_type": 1, "gpio_pin": 12}"#.to_string();
-        let update_fluid = UpdateFluidArgs {
-            raw: Some(raw),
-            fr_id: None,
-            reg_type: None,
-            gpio_pin: None,
-            pump_num: Some(0),
-        };
+        let update_fluid = UpdateFluidArgs::builder().raw(raw).build();
         let fr: UdmResult<FluidRegulator> = update_fluid.sanatize_input();
         assert_eq!(
             fr.unwrap_err().to_string(),
@@ -440,13 +447,11 @@ mod tests {
     }
     #[test]
     fn test_sanatize_update_input_not_all_values() {
-        let update_fluid = UpdateFluidArgs {
-            raw: None,
-            fr_id: None,
-            reg_type: Some("REGULATOR_TYPE_VALVE".to_string()),
-            gpio_pin: Some(12),
-            pump_num: Some(0),
-        };
+        let update_fluid = UpdateFluidArgs::builder()
+            .reg_type("REGULATOR_TYPE_VALVE".to_string())
+            .gpio_pin(12)
+            .pump_num(0)
+            .build();
         let fr: UdmResult<FluidRegulator> = update_fluid.sanatize_input();
         assert!(fr.is_err(), "{}", true)
     }

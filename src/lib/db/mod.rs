@@ -1,3 +1,4 @@
+use crate::error::trace_log_error;
 use crate::error::UdmError;
 use crate::parsers::settings;
 use crate::rpc_types::fhs_types::RegulatorType;
@@ -124,6 +125,7 @@ pub enum FluidRegulationSchema {
     GpioPin,
     RegulatorType,
     PumpNum,
+    GpioName,
 }
 impl SqlTransactionsFactory for FluidRegulationSchema {
     fn column_to_str(&self) -> &'static str {
@@ -133,6 +135,7 @@ impl SqlTransactionsFactory for FluidRegulationSchema {
             Self::GpioPin => "gpio_pin",
             Self::RegulatorType => "regulator_type",
             Self::PumpNum => "pump_num",
+            Self::GpioName => "gpio_name",
         }
     }
     fn from_str(value: &'static str) -> Option<Self> {
@@ -142,6 +145,7 @@ impl SqlTransactionsFactory for FluidRegulationSchema {
             "gpio_pin" => Some(FluidRegulationSchema::GpioPin),
             "regulator_type" => Some(FluidRegulationSchema::RegulatorType),
             "pump_num" => Some(FluidRegulationSchema::PumpNum),
+            "gpio_name" => Some(FluidRegulationSchema::GpioName),
             _ => None,
         }
     }
@@ -156,6 +160,7 @@ impl Display for FluidRegulationSchema {
         gpio_pin: int\n\
         regulator_type: {:?}\n\
         pump_num: int
+        gpio_name: varchar
         ",
             RegulatorType::get_possible_values()
         )
@@ -176,6 +181,7 @@ impl SqlTableTransactionsFactory for FluidRegulationSchema {
             .col(ColumnDef::new(Self::RegulatorType).integer().not_null())
             .col(ColumnDef::new(Self::GpioPin).integer())
             .col(ColumnDef::new(Self::PumpNum).integer().null())
+            .col(ColumnDef::new(Self::GpioName).string().null())
             .build(builder)
     }
 
@@ -199,7 +205,10 @@ impl TryFrom<String> for FluidRegulationSchema {
             "gpio_pin" => Ok(FluidRegulationSchema::GpioPin),
             "regulator_type" => Ok(FluidRegulationSchema::RegulatorType),
             "pump_num" => Ok(FluidRegulationSchema::PumpNum),
-            _ => Err(UdmError::ApiFailure("Failed to collect Column".to_string())),
+            "gpio_name" => Ok(FluidRegulationSchema::GpioName),
+            _ => Err(trace_log_error(trace_log_error(UdmError::ApiFailure(
+                "Failed to collect Column".to_string(),
+            )))),
         }
     }
 }
@@ -251,7 +260,7 @@ impl SqlTableTransactionsFactory for PumpLogSchema {
         Table::create()
             .table(Self::Table)
             .if_not_exists()
-            .col(ColumnDef::new(Self::FluidId).integer().not_null())
+            .col(ColumnDef::new(Self::FluidId).integer())
             .col(ColumnDef::new(Self::ReqId).uuid().not_null().primary_key())
             .col(ColumnDef::new(Self::ReqType).integer())
             .build(builder)
@@ -276,7 +285,9 @@ impl TryFrom<String> for PumpLogSchema {
             "ReqId" => Ok(PumpLogSchema::ReqId),
             "ReqType" => Ok(PumpLogSchema::ReqType),
             "FluidId" => Ok(PumpLogSchema::FluidId),
-            _ => Err(UdmError::ApiFailure("Failed to collect Column".to_string())),
+            _ => Err(trace_log_error(UdmError::ApiFailure(
+                "Failed to collect Column".to_string(),
+            ))),
         }
     }
 }
@@ -357,9 +368,9 @@ impl TryFrom<String> for IngredientSchema {
             "ingredient_type" => Ok(Self::IngredientType),
             "fr_id" => Ok(Self::FrId),
             "instruction_id" => Ok(Self::InstructionId),
-            _ => Err(UdmError::ApiFailure(
+            _ => Err(trace_log_error(UdmError::ApiFailure(
                 "Failed to collect IngredientSchema Column".to_string(),
-            )),
+            ))),
         }
     }
 }
@@ -475,9 +486,9 @@ impl TryFrom<String> for InstructionSchema {
             "instruction_id" => Ok(Self::InstructionId),
             "instruction_detail" => Ok(Self::InstructionDetail),
             "instruction_name" => Ok(Self::InstructionName),
-            _ => Err(UdmError::ApiFailure(
+            _ => Err(trace_log_error(UdmError::ApiFailure(
                 "Failed to collect InstructionSchema column".to_string(),
-            )),
+            ))),
         }
     }
 }
@@ -561,9 +572,9 @@ impl TryFrom<String> for InstructionToRecipeSchema {
             "recipe_id" => Ok(Self::RecipeId),
             "instruction_id" => Ok(Self::InstructionId),
             "instruction_order" => Ok(Self::InstructionOrder),
-            _ => Err(UdmError::ApiFailure(
+            _ => Err(trace_log_error(UdmError::ApiFailure(
                 "Failed to collect InstructionToRecipeSchema Column".to_string(),
-            )),
+            ))),
         }
     }
 }
@@ -718,7 +729,10 @@ impl SqlTableTransactionsFactory for RecipeSchema {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests;
+
+#[cfg(test)]
+mod basic_tests {
     use super::*;
 
     #[test]

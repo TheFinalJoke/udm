@@ -1,14 +1,21 @@
+// Protocol Buffer definitions for recipe-related types.
+//
+// This file defines the core data structures for managing drink
+// recipes, ingredients, and instructions in the UDM system.
+
 syntax = "proto3";
 package recipe_types;
 
 import "fhs.proto";
 
+// IngredientType categorizes ingredients by their physical form.
 enum IngredientType {
   INGREDIENT_TYPE_UNSPECIFIED = 0;
   INGREDIENT_TYPE_FLUID = 1;
   INGREDIENT_TYPE_EATABLES = 2;
 }
 
+// DrinkSize defines standard drink portion sizes.
 enum DrinkSize {
   DRINK_SIZE_UNSPECIFIED = 0;
   DRINK_SIZE_SMALL = 1;
@@ -17,12 +24,17 @@ enum DrinkSize {
   DRINK_SIZE_LARGE = 4;
   DRINK_SIZE_EXTRA_LARGE = 5;
 }
+
+// Instruction represents a step or action in drink preparation.
 message Instruction {
   int32 id = 1;
   string instruction_detail = 2;
   string instruction_name = 3;
 }
 
+// Ingredient represents a component used in drink recipes.
+// It can be a fluid with an associated regulator or a
+// non-fluid eatable.
 message Ingredient {
   int32 id = 1;
   string name = 2;
@@ -35,6 +47,8 @@ message Ingredient {
   optional recipe_types.Instruction instruction = 9;
 }
 
+// Recipe defines a complete drink recipe including its
+// ingredients, size, and preparation instructions.
 message Recipe {
   int32 id = 1;
   string name = 2;

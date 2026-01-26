@@ -11,6 +11,7 @@ use cli_table::Style;
 use cli_table::Table;
 use cli_table::TableStruct;
 use lib::db::InstructionToRecipeSchema;
+use lib::error::trace_log_error;
 use lib::error::UdmError;
 use lib::rpc_types::service_types::AddRecipeInstOrderRequest;
 use lib::rpc_types::service_types::CollectRecipeInstOrderRequest;
@@ -53,7 +54,7 @@ impl MainCommandHandler for RecipeToInstructionCommands {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateInstructionOrderArgs {
     #[arg(
         long,
@@ -94,14 +95,16 @@ impl MainCommandHandler for UpdateInstructionOrderArgs {
             tracing::error!("{}", e);
             std::process::exit(2)
         });
-        let mut open_connection = options.connect().await?;
+        let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_recipe_instruction_order(UpdateRecipeInstOrderRequest {
-                recipe_orders: [recipe_order].to_vec(),
-                recipe_id: recipe_order.recipe_id,
-            })
+            .update_recipe_instruction_order(
+                UpdateRecipeInstOrderRequest::builder()
+                    .recipe_orders([recipe_order].to_vec())
+                    .recipe_id(recipe_order.recipe_id)
+                    .build(),
+            )
             .await
-            .map_err(|e| UdmError::ApiFailure(format!("{}", e)))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!("Updated into database");
         println!("Updated into database");
@@ -113,12 +116,13 @@ impl UdmGrpcActions<RecipeInstructionOrder> for UpdateInstructionOrderArgs {
         if self.raw.is_some() && !self.raw.clone().unwrap().is_empty() {
             tracing::debug!("Json passed: {:?}", &self.raw);
             let recipe_order: RecipeInstructionOrder =
-                serde_json::from_str(&self.raw.clone().unwrap())
-                    .map_err(|_| UdmError::InvalidInput(String::from("Failed to parse json")))?;
+                serde_json::from_str(&self.raw.clone().unwrap()).map_err(|_| {
+                    trace_log_error(UdmError::InvalidInput(String::from("Failed to parse json")))
+                })?;
             if self.id.is_none() || self.id.unwrap() == 0 {
-                return Err(UdmError::InvalidInput(
+                return Err(trace_log_error(UdmError::InvalidInput(
                     "Ingredient ID is not set".to_string(),
-                ));
+                )));
             }
             return Ok(recipe_order);
         }
@@ -129,9 +133,9 @@ impl UdmGrpcActions<RecipeInstructionOrder> for UpdateInstructionOrderArgs {
 impl FieldValidation for UpdateInstructionOrderArgs {
     fn validate_all_fields(&self) -> UdmResult<()> {
         if self.id.is_none() || self.id.unwrap() == 0 {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Ingredient ID is not set".to_string(),
-            ));
+            )));
         }
         Ok(())
     }
@@ -142,9 +146,9 @@ impl FieldValidation for UpdateInstructionOrderArgs {
             || self.instruction_id.is_none()
             || self.instruction_id.unwrap() == 0
         {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Ingredient ID is not set".to_string(),
-            ));
+            )));
         }
         Ok(())
     }
@@ -161,7 +165,7 @@ impl TryFrom<&UpdateInstructionOrderArgs> for RecipeInstructionOrder {
         })
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddInstructionOrderArgs {
     #[arg(
         long,
@@ -194,15 +198,17 @@ impl MainCommandHandler for AddInstructionOrderArgs {
             tracing::error!("{}", e);
             std::process::exit(2)
         });
-        let mut open_connection = options.connect().await?;
+        let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_recipe_instruction_order(AddRecipeInstOrderRequest {
-                recipe_orders: [instruct_recipe].to_vec(),
-            })
+            .add_recipe_instruction_order(
+                AddRecipeInstOrderRequest::builder()
+                    .recipe_orders([instruct_recipe].to_vec())
+                    .build(),
+            )
             .await
             .map_err(|e| {
                 tracing::error!("{}", &e.to_string());
-                UdmError::ApiFailure(format!("{}", e))
+                trace_log_error(UdmError::ApiFailure(format!("{e}")))
             })?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
@@ -217,12 +223,11 @@ impl TryFrom<&AddInstructionOrderArgs> for RecipeInstructionOrder {
     type Error = UdmError;
 
     fn try_from(value: &AddInstructionOrderArgs) -> Result<Self, Self::Error> {
-        Ok(RecipeInstructionOrder {
-            recipe_id: value.recipe_id.unwrap(),
-            instruction_id: value.instruction_id.unwrap(),
-            position: value.position.unwrap(),
-            id: None,
-        })
+        Ok(RecipeInstructionOrder::builder()
+            .recipe_id(value.recipe_id.unwrap())
+            .instruction_id(value.instruction_id.unwrap())
+            .position(value.position.unwrap())
+            .build())
     }
 }
 impl UdmGrpcActions<RecipeInstructionOrder> for AddInstructionOrderArgs {
@@ -230,13 +235,14 @@ impl UdmGrpcActions<RecipeInstructionOrder> for AddInstructionOrderArgs {
         if self.raw.is_some() {
             tracing::debug!("Json passed: {}", &self.raw.clone().unwrap());
             let recipe_order: RecipeInstructionOrder =
-                serde_json::from_str(&self.raw.clone().unwrap())
-                    .map_err(|_| UdmError::InvalidInput(String::from("Failed to parse json")))?;
+                serde_json::from_str(&self.raw.clone().unwrap()).map_err(|_| {
+                    trace_log_error(UdmError::InvalidInput(String::from("Failed to parse json")))
+                })?;
             if self.recipe_id.is_none() || self.instruction_id.is_none() || self.position.is_none()
             {
-                return Err(UdmError::InvalidInput(
+                return Err(trace_log_error(UdmError::InvalidInput(
                     "Not all values are present".to_string(),
-                ));
+                )));
             }
             return Ok(recipe_order);
         }
@@ -247,9 +253,9 @@ impl UdmGrpcActions<RecipeInstructionOrder> for AddInstructionOrderArgs {
 impl FieldValidation for AddInstructionOrderArgs {
     fn validate_all_fields(&self) -> UdmResult<()> {
         if self.recipe_id.is_none() || self.instruction_id.is_none() || self.position.is_none() {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Not all values are present".to_string(),
-            ));
+            )));
         }
         Ok(())
     }
@@ -258,7 +264,7 @@ impl FieldValidation for AddInstructionOrderArgs {
         unimplemented!()
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowInstructionOrderArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -277,13 +283,15 @@ impl MainCommandHandler for ShowInstructionOrderArgs {
             Ok(())
         } else {
             let fetched = self.sanatize_input()?;
-            let mut open_connection = options.connect().await?;
+            let mut open_connection = options.connect_to_udm().await?;
             let response = open_connection
-                .collect_recipe_instruction_order(CollectRecipeInstOrderRequest {
-                    expressions: fetched,
-                })
+                .collect_recipe_instruction_order(
+                    CollectRecipeInstOrderRequest::builder()
+                        .expressions(fetched)
+                        .build(),
+                )
                 .await
-                .map_err(|e| UdmError::ApiFailure(format!("{}", e)));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -294,7 +302,7 @@ impl MainCommandHandler for ShowInstructionOrderArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    println!("Error: Could not show FRs due to: {err}");
                     Ok(())
                 }
             }
@@ -336,16 +344,16 @@ impl ShowHandler<RecipeInstructionOrder> for ShowInstructionOrderArgs {
     }
     fn sanatize_input(&self) -> UdmResult<Vec<FetchData>> {
         if self.query_options.is_none() {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Error while parsing query".to_string(),
-            ));
+            )));
         }
         let collected_queries =
             FetchData::to_fetch_data_vec(self.query_options.clone().unwrap().as_str())?;
         Ok(collected_queries)
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveInstructionOrderArgs {
     #[arg(short, long, required = true)]
     id: i32,
@@ -365,7 +373,7 @@ impl MainCommandHandler for RemoveInstructionOrderArgs {
             let _ = ensure_removal();
         }
         let req = RemoveRecipeInstOrderRequest { id: self.id };
-        let mut open_conn = options.connect().await?;
+        let mut open_conn = options.connect_to_udm().await?;
         let response = open_conn.remove_recipe_instruction_order(req).await;
         tracing::debug!("Got response {:?}", response);
         match response {

@@ -43,7 +43,7 @@ impl TryFrom<i32> for ReqType {
 }
 impl Display for ReqType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 impl MultipleValues for ReqType {
@@ -78,23 +78,30 @@ impl ReqType {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, bon::Builder)]
 pub(crate) struct PumpLogger {
     pub(crate) req_id: Uuid,
     pub(crate) req_type: ReqType,
     pub(crate) fluid_id: Option<i32>,
 }
 impl PumpLogger {
+    pub(crate) fn create_uuid() -> Uuid {
+        let uuid = Uuid::new_v4();
+        tracing::info!("Created a new UUID {}", uuid);
+        uuid
+    }
     pub(crate) fn new(req_id: Option<Uuid>, req_type: ReqType, fluid_id: Option<i32>) -> Self {
         let req_id = req_id.unwrap_or(Uuid::new_v4());
+        tracing::info!("Using UUID {} for {}", req_id, req_type);
         Self {
             req_id,
             req_type,
             fluid_id,
         }
     }
-    pub(crate) async fn publish(&self, connection: Box<dyn DbConnection>) -> UdmResult<Uuid> {
+    pub(crate) async fn publish(&self, connection: &dyn DbConnection) -> UdmResult<Uuid> {
         let query = self.gen_insert_query().to_string(PostgresQueryBuilder);
+
         let uuid = connection.insert_with_uuid(query).await?;
         Ok(uuid)
     }

@@ -1,5 +1,8 @@
 extern crate log;
 use clap::Parser;
+use cli::helpers::DrinkControllerServerCliOptions;
+use cli::helpers::ServerOptions;
+use cli::helpers::SqlUdmServerCliOptions;
 use cli::helpers::UdmServerOptions;
 use lib::logger::UdmLogger;
 use lib::logger::UdmLoggerType;
@@ -13,12 +16,19 @@ pub mod cli;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let cli_opts = cli::UdmCli::parse();
-    UdmLogger::init(UdmLoggerType::Bin, cli_opts.verbose, None, false)?;
+    UdmLogger::init(UdmLoggerType::Bin, cli_opts.verbose, None)?;
     tracing::info!("Initialized logger");
-    let server_options = UdmServerOptions {
-        host: cli_opts.udm_server.to_string(),
-        port: cli_opts.udm_port,
-    };
+    let server_options = UdmServerOptions::builder()
+        .sql_udm_server(SqlUdmServerCliOptions::new(
+            cli_opts.udm_server.to_string(),
+            cli_opts.udm_port,
+        ))
+        .drink_server(DrinkControllerServerCliOptions::new(
+            cli_opts.drink_server.to_string(),
+            cli_opts.drink_ctrl_port,
+        ))
+        .build();
+    tracing::info!("Server cli options created: {:?}", &server_options);
     if let Some(commands) = &cli_opts.command {
         match commands {
             cli::UdmCommand::Recipe(user_input) => {
@@ -37,6 +47,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let _ = user_input.handle_command(server_options).await;
             }
             cli::UdmCommand::Reset(user_input) => {
+                let _ = user_input.handle_command(server_options).await;
+            }
+            cli::UdmCommand::Drink(user_input) => {
                 let _ = user_input.handle_command(server_options).await;
             }
         }

@@ -1,6 +1,8 @@
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
+use lib::error::trace_log_error;
+pub mod drink_server;
 pub mod fluid;
 pub mod helpers;
 pub mod ingredient;
@@ -17,7 +19,7 @@ use lib::rpc_types::service_types::ResetRequest;
 use lib::rpc_types::service_types::ResetType;
 use lib::UdmResult;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, bon::Builder)]
 #[command(author, version, about, long_about = None)]
 pub struct UdmCli {
     #[command(flatten)]
@@ -37,6 +39,20 @@ pub struct UdmCli {
         default_value = "19211"
     )]
     pub udm_port: i64,
+    #[arg(
+        short = 'd',
+        long,
+        help = "Ip for drink controller server",
+        default_value = "127.0.0.1"
+    )]
+    pub drink_server: std::net::Ipv4Addr,
+    #[arg(
+        short = 'c',
+        long,
+        help = "Connect to drink controller port",
+        default_value = "53049"
+    )]
+    pub drink_ctrl_port: i64,
     #[command(subcommand)]
     pub command: Option<UdmCommand>,
 }
@@ -46,6 +62,8 @@ impl Default for UdmCli {
             verbose: Verbosity::default(),
             udm_server: std::net::Ipv4Addr::new(127, 0, 0, 1),
             udm_port: 19211,
+            drink_server: std::net::Ipv4Addr::new(127, 0, 0, 1),
+            drink_ctrl_port: 53049,
             command: None,
         }
     }
@@ -57,6 +75,8 @@ impl UdmCli {
             verbose: verbosity,
             udm_server: std::net::Ipv4Addr::new(127, 0, 0, 1),
             udm_port: 19211,
+            drink_server: std::net::Ipv4Addr::new(127, 0, 0, 1),
+            drink_ctrl_port: 53049,
             command: None,
         }
     }
@@ -76,9 +96,11 @@ pub enum UdmCommand {
     RecipeToInstruction(recipetoinstruction::RecipeToInstructionCommands),
     #[command(about = "Reset all tables in the database")]
     Reset(ResetCommands),
+    #[command(about = "To interact with drink ctrl server", subcommand)]
+    Drink(drink_server::DrinkServer),
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ResetCommands {
     #[arg(short, long, help = "reset all databases", default_value = "true")]
     all: bool,
@@ -97,11 +119,11 @@ impl MainCommandHandler for ResetCommands {
                 }
             },
         };
-        let mut connection = options.connect().await?;
+        let mut connection = options.connect_to_udm().await?;
         let reset = connection
             .reset_db(req)
             .await
-            .map_err(|e| UdmError::ApiFailure(format!("{}", e)));
+            .map_err(|e| trace_log_error(trace_log_error(UdmError::ApiFailure(format!("{e}")))));
         match reset {
             Ok(_) => {
                 tracing::info!("Successfully reset the tables");

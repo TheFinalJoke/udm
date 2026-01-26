@@ -13,7 +13,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .proto_path("protos/")
         .protoc_arg("--experimental_allow_proto3_optional")
-        .compile(protos, &["protos/"])?;
+        .message_attribute(".", "#[derive(bon::Builder)]")
+        .compile_protos(protos, &["protos/"])?;
 
     tonic_build::configure()
         .protoc_arg("--experimental_allow_proto3_optional")
@@ -21,7 +22,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_server(true)
         .file_descriptor_set_path(out_dir.join("store_descriptor.bin"))
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
-        .compile(
+        .message_attribute(".", "#[derive(bon::Builder)]")
+        .compile_protos(
             &[
                 "protos/server.proto",
                 "protos/drink_controller_server.proto",

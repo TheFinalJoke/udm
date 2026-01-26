@@ -6,6 +6,7 @@ use std::result;
 pub mod db;
 pub mod error;
 pub mod logger;
+pub mod macros;
 pub mod parsers;
 pub mod rpc_types;
 pub mod system;
@@ -43,6 +44,6 @@ impl Retrieval<Config> for FileRetrieve {
             ))
             .build();
         tracing::trace!("Settings ConfigBuild {:?}", &settings);
-        Ok(settings.unwrap_or_else(|error| panic!("Failed to get Config {}", error)))
+        Ok(settings.unwrap_or_else(|error| panic!("Failed to get Config {error}")))
     }
 }

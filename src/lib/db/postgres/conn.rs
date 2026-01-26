@@ -8,6 +8,7 @@ use crate::db::InstructionToRecipeSchema;
 use crate::db::PumpLogSchema;
 use crate::db::RecipeSchema;
 use crate::db::SqlTableTransactionsFactory;
+use crate::error::trace_log_error;
 use crate::error::UdmError;
 use crate::parsers::settings;
 use crate::UdmResult;
@@ -26,15 +27,15 @@ impl DbConnection for OpenPostgresConnection {
         tracing::info!("Received insert call query: {}", &stmt);
         let prepared = self.conn.prepare(stmt.as_str()).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         let row = self.conn.query_one(&prepared, &[]).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         let data: UdmResult<i32> = row
             .try_get(0)
-            .map_err(|e| UdmError::ApiFailure(e.to_string()));
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(e.to_string())));
         tracing::debug!("Result from inserting into db {:?}", &data);
         data
     }
@@ -42,15 +43,15 @@ impl DbConnection for OpenPostgresConnection {
         tracing::info!("Received insert call query: {}", &stmt);
         let prepared = self.conn.prepare(stmt.as_str()).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         let row = self.conn.query_one(&prepared, &[]).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         let data: UdmResult<Uuid> = row
             .try_get(0)
-            .map_err(|e| UdmError::ApiFailure(e.to_string()));
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(e.to_string())));
         tracing::debug!("Result from inserting into db {:?}", &data);
         data
     }
@@ -59,7 +60,7 @@ impl DbConnection for OpenPostgresConnection {
         let prepared = self.conn.prepare(stmt.as_str()).await?;
         let result = self.conn.query_opt(&prepared, &[]).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         tracing::debug!("Result from deleting from db: {:?}", &result);
         Ok(())
@@ -69,11 +70,11 @@ impl DbConnection for OpenPostgresConnection {
         let prepared = self.conn.prepare(stmt.as_str()).await?;
         let row = self.conn.query_one(&prepared, &[]).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         let data: UdmResult<i32> = row
             .try_get(0)
-            .map_err(|e| UdmError::ApiFailure(e.to_string()));
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(e.to_string())));
         tracing::debug!("Result from inserting into db {:?}", &data);
         data
     }
@@ -82,7 +83,7 @@ impl DbConnection for OpenPostgresConnection {
         let prepared = self.conn.prepare(stmt.as_str()).await?;
         let rows = self.conn.query(&prepared, &[]).await.map_err(|e| {
             tracing::error!("{}", e.to_string());
-            UdmError::ApiFailure(e.to_string())
+            trace_log_error(UdmError::ApiFailure(e.to_string()))
         })?;
         tracing::debug!("Result from inserting into db {:?}", &rows);
         Ok(rows)
@@ -150,6 +151,7 @@ impl DatabaseTransactionsFactory for OpenPostgresConnection {
             tracing::error!("{}", query_err);
             std::process::exit(20)
         }
+        tracing::info!("Database and Tables are created for Sql Daemon Server");
         Ok(())
     }
     async fn gen_schmea_dc(&mut self) -> UdmResult<()> {
@@ -159,16 +161,17 @@ impl DatabaseTransactionsFactory for OpenPostgresConnection {
             tracing::error!("{}", query_err);
             std::process::exit(20)
         }
+        tracing::info!("Database and Tables are created for Drink Controller");
         Ok(())
     }
     async fn truncate_schema(&self) -> UdmResult<()> {
         let tables = r#""InstructionToRecipe", "Ingredient", "Recipe", "Instruction", "FluidRegulation", "Pumplog""#;
-        let query = format!("TRUNCATE TABLE {};", tables);
+        let query = format!("TRUNCATE TABLE {tables};");
         tracing::info!("Running query: {}", &query);
         self.conn
             .batch_execute(query.as_str())
             .await
-            .map_err(|e| UdmError::ApiFailure(e.to_string()))
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(e.to_string())))
     }
     async fn check_and_alter_dbs(&self, _bin_type: BinaryType) -> UdmResult<()> {
         todo!()
@@ -249,7 +252,7 @@ impl DatabaseTransactionsFactory for OpenPostgresConnection {
         //         .conn
         //         .query(BASE_COLLECT_FIELDS, &[&table])
         //         .await
-        //         .map_err(|e| UdmError::ApiFailure(e.to_string()))?;
+        //         .map_err(|e| trace_log_error(UdmError::ApiFailure(e.to_string()))?;
         //     for row in results {
         //         let column = &row.try_get(0)?;
         //         if !columns.contains(column) {

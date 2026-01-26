@@ -8,6 +8,7 @@ use crate::db::IngredientSchema;
 use crate::db::InstructionSchema;
 use crate::db::InstructionToRecipeSchema;
 use crate::db::RecipeSchema;
+use crate::error::trace_log_error;
 use crate::error::UdmError;
 use crate::rpc_types::service_types::InstructionToRecipeMetadata;
 use crate::rpc_types::FieldValidation;
@@ -26,18 +27,18 @@ use sea_query::UpdateStatement;
 impl FieldValidation for Instruction {
     fn validate_all_fields(&self) -> UdmResult<()> {
         if self.id == 0 || self.instruction_name.is_empty() || self.instruction_detail.is_empty() {
-            return Err(UdmError::InvalidInput(String::from(
+            return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
-            )));
+            ))));
         }
         Ok(())
     }
 
     fn validate_without_id_fields(&self) -> UdmResult<()> {
         if self.instruction_name.is_empty() || self.instruction_detail.is_empty() {
-            return Err(UdmError::InvalidInput(String::from(
+            return Err(trace_log_error(UdmError::InvalidInput(String::from(
                 "`Not all required fields were passed`",
-            )));
+            ))));
         }
         Ok(())
     }
@@ -130,6 +131,7 @@ impl TryFrom<Row> for Ingredient {
                         gpio_pin: None,
                         regulator_type: None,
                         pump_num: None,
+                        gpio_name: None,
                     })
                 })
             },
@@ -158,7 +160,7 @@ impl MultipleValues for IngredientType {
 
 impl Display for IngredientType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -181,7 +183,7 @@ impl GenQueries for Ingredient {
             self.is_active.into(),
             self.ingredient_type.into(),
         ];
-        if let Some(fr) = self.regulator {
+        if let Some(fr) = &self.regulator {
             if let Some(id) = fr.fr_id {
                 columns.push(IngredientSchema::FrId);
                 values.push(id.into());
@@ -219,7 +221,7 @@ impl GenQueries for Ingredient {
                 self.ingredient_type.into(),
             ),
         ];
-        if let Some(fr) = self.regulator {
+        if let Some(fr) = &self.regulator {
             if let Some(id) = fr.fr_id {
                 values.push((IngredientSchema::FrId, id.into()));
             }
@@ -265,7 +267,7 @@ impl MultipleValues for DrinkSize {
 
 impl Display for DrinkSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

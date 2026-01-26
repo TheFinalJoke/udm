@@ -150,12 +150,16 @@ impl UdmConfig for PostgresConfigurer {}
 pub struct DrinkControllerConfigurer {
     #[serde(default = "default_drink_controller_port")]
     pub port: i64,
+
+    #[serde(default = "default_gpiochip_path")]
+    pub gpio_char_path: String,
 }
 
 impl Default for DrinkControllerConfigurer {
     fn default() -> Self {
         Self {
             port: default_drink_controller_port(),
+            gpio_char_path: default_gpiochip_path(),
         }
     }
 }
@@ -172,4 +176,8 @@ fn default_udm_port() -> i64 {
 
 fn default_drink_controller_port() -> i64 {
     53049
+}
+
+fn default_gpiochip_path() -> String {
+    String::from("/dev/gpiochip0")
 }

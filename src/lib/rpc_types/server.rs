@@ -69,6 +69,8 @@ use signal_hook_tokio::SignalsInfo;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::vec;
+use tokio::sync::Notify;
 use tonic::transport::Server;
 use tonic::IntoRequest;
 use tonic::Request;
@@ -96,7 +98,6 @@ impl DaemonServerContext {
 
 #[async_trait]
 pub trait GrpcServerFactory<T> {
-    fn new(config: Arc<UdmConfigurer>, addr: SocketAddr) -> Self;
     async fn build_context(&self) -> T;
     async fn start_server(&self) -> UdmResult<()>;
     async fn start_server_with_signal(&self, mut signal: SignalsInfo) -> UdmResult<()>;
@@ -117,12 +118,14 @@ impl UdmService for DaemonServerContext {
         let input_result = self.connection.insert(query).await;
         match input_result {
             Ok(fr_id) => {
-                let fr_response = AddFluidRegulatorResponse { fr_id }.to_response();
+                let fr_response = AddFluidRegulatorResponse::builder()
+                    .fr_id(fr_id)
+                    .build()
+                    .to_response();
                 Ok(fr_response)
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to insert into database: {}",
-                e
+                "Failed to insert into database: {e}"
             ))),
         }
     }
@@ -136,7 +139,7 @@ impl UdmService for DaemonServerContext {
         let delete_result = self.connection.delete(query).await;
         match delete_result {
             Ok(_) => {
-                let remove_response = GenericRemovalResponse {}.to_response();
+                let remove_response = GenericRemovalResponse::builder().build().to_response();
                 Ok(remove_response)
             }
             Err(e) => Err(Status::aborted(e.to_string())),
@@ -155,12 +158,15 @@ impl UdmService for DaemonServerContext {
         let result = self.connection.update(query).await;
         match result {
             Ok(fr_id) => {
-                let fr_response = ModifyFluidRegulatorResponse { fr_id }.to_response();
+                let fr_response = ModifyFluidRegulatorResponse::builder()
+                    .fr_id(fr_id)
+                    .build()
+                    .to_response();
+
                 Ok(fr_response)
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to update into database: {}",
-                e
+                "Failed to update into database: {e}"
             ))),
         }
     }
@@ -178,19 +184,29 @@ impl UdmService for DaemonServerContext {
         let results = self.connection.select(query).await;
         match results {
             Ok(results) => {
-                let frs: Vec<FluidRegulator> = results
-                    .into_iter()
-                    .map(|row| FluidRegulator::try_from(row).unwrap())
-                    .collect_vec();
-                tracing::info!("Successfully collected fluid regulators");
-                tracing::debug!("Collected data {:?}", frs);
-                Ok(CollectFluidRegulatorsResponse { fluids: frs }.to_response())
+                if results.is_empty() {
+                    tracing::info!("Did not find any results for Fluid Regulators");
+                    Err(Status::invalid_argument(
+                        "Did not find any results for Fluid Regulators",
+                    ))
+                } else {
+                    let frs: Vec<FluidRegulator> = results
+                        .into_iter()
+                        .map(|row| FluidRegulator::try_from(row).unwrap())
+                        .collect_vec();
+                    tracing::info!("Successfully collected fluid regulators");
+                    tracing::debug!("Collected data {:?}", frs);
+                    Ok(CollectFluidRegulatorsResponse::builder()
+                        .fluids(frs)
+                        .build()
+                        .to_response())
+                }
             }
             Err(e) => {
-                tracing::error!("There was an error collecting {}", e.to_string());
+                let err_msg = e.to_string();
+                tracing::error!("There was an error collecting {}", err_msg);
                 Err(Status::cancelled(format!(
-                    "Failed to query the database: {}",
-                    e
+                    "Failed to query the database: {err_msg}"
                 )))
             }
         }
@@ -201,8 +217,7 @@ impl UdmService for DaemonServerContext {
     ) -> Result<Response<AddRecipeResponse>, Status> {
         tracing::debug!("Got {:?}", request);
         let recipe = request
-            .get_ref()
-            .clone()
+            .into_inner()
             .recipe
             .ok_or_else(|| Status::cancelled("Invalid request to add recipe"))?;
         let query = recipe.gen_insert_query().to_string(PostgresQueryBuilder);
@@ -211,27 +226,28 @@ impl UdmService for DaemonServerContext {
             Ok(recipe_id) => {
                 // Insert instruction order into db
                 for (position, instruction) in recipe.instructions {
-                    let order = InstructionToRecipeMetadata {
-                        id: None,
-                        recipe_id,
-                        instruction_id: instruction.id,
-                        instruction_order: position,
-                    };
+                    let order = InstructionToRecipeMetadata::builder()
+                        .recipe_id(recipe_id)
+                        .instruction_id(instruction.id)
+                        .instruction_order(position)
+                        .build();
                     let order_query = order.gen_insert_query().to_string(PostgresQueryBuilder);
                     self.connection.insert(order_query).await.map_err(|e| {
-                        let message = format!("Failed to query the database: {}", e);
+                        let message = format!("Failed to query the database: {e}");
                         tracing::error!(message);
                         Status::cancelled(message)
                     })?;
                 }
-                let response = AddRecipeResponse { recipe_id }.to_response();
+                let response = AddRecipeResponse::builder()
+                    .recipe_id(recipe_id)
+                    .build()
+                    .to_response();
                 Ok(response)
             }
             Err(e) => {
-                format!("Failed to insert into database: {}", e);
+                tracing::error!("Failed to insert into database: {e}");
                 Err(Status::data_loss(format!(
-                    "Failed to insert into database: {}",
-                    e
+                    "Failed to insert into database: {e}"
                 )))
             }
         }
@@ -241,12 +257,12 @@ impl UdmService for DaemonServerContext {
         request: Request<RemoveRecipeRequest>,
     ) -> Result<Response<GenericRemovalResponse>, Status> {
         tracing::debug!("Got Request {request:?}");
-        let recipe_id = request.get_ref().recipe_id;
+        let recipe_id = request.into_inner().recipe_id;
         let query = FluidRegulator::gen_remove_query(recipe_id).to_string(PostgresQueryBuilder);
         let delete_result = self.connection.delete(query).await;
         match delete_result {
             Ok(_) => {
-                let remove_response = GenericRemovalResponse {}.to_response();
+                let remove_response = GenericRemovalResponse::builder().build().to_response();
                 Ok(remove_response)
             }
             Err(e) => Err(Status::aborted(e.to_string())),
@@ -258,8 +274,7 @@ impl UdmService for DaemonServerContext {
     ) -> Result<Response<ModifyRecipeResponse>, Status> {
         tracing::debug!("Got {:?}", request);
         let recipe = request
-            .get_ref()
-            .clone()
+            .into_inner()
             .recipe
             .ok_or_else(|| Status::cancelled("Invalid request to add recipe"))?;
         let query = recipe.gen_update_query().to_string(PostgresQueryBuilder);
@@ -268,23 +283,24 @@ impl UdmService for DaemonServerContext {
             Ok(recipe_id) => {
                 // Insert instruction order into db
                 for (position, instruction) in recipe.instructions {
-                    let order = InstructionToRecipeMetadata {
-                        id: None,
-                        recipe_id,
-                        instruction_id: instruction.id,
-                        instruction_order: position,
-                    };
+                    let order = InstructionToRecipeMetadata::builder()
+                        .recipe_id(recipe_id)
+                        .instruction_id(instruction.id)
+                        .instruction_order(position)
+                        .build();
                     let order_query = order.gen_insert_query().to_string(PostgresQueryBuilder);
                     self.connection.update(order_query).await.map_err(|e| {
-                        Status::cancelled(format!("Failed to query the database: {}", e))
+                        Status::cancelled(format!("Failed to query the database: {e}"))
                     })?;
                 }
-                let response = ModifyRecipeResponse { recipe_id }.to_response();
+                let response = ModifyRecipeResponse::builder()
+                    .recipe_id(recipe_id)
+                    .build()
+                    .to_response();
                 Ok(response)
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to update into database: {}",
-                e
+                "Failed to update into database: {e}"
             ))),
         }
     }
@@ -295,7 +311,7 @@ impl UdmService for DaemonServerContext {
     ) -> Result<Response<CollectRecipeResponse>, Status> {
         tracing::debug!("Got {:?}", request);
         let exprs = request
-            .get_ref()
+            .into_inner()
             .get_expressions()
             .map_err(|e| Status::cancelled(e.to_string()))?;
         let query = Recipe::gen_select_query_on_fields(RecipeSchema::Table, exprs)
@@ -333,10 +349,10 @@ impl UdmService for DaemonServerContext {
                 .to_response())
             }
             Err(e) => {
-                tracing::error!("There was an error collecting {}", e.to_string());
+                let err_msg = e.to_string();
+                tracing::error!("There was an error collecting {}", err_msg);
                 Err(Status::cancelled(format!(
-                    "Failed to query the database: {}",
-                    e
+                    "Failed to query the database: {err_msg}"
                 )))
             }
         }
@@ -357,12 +373,14 @@ impl UdmService for DaemonServerContext {
         match input_result {
             Ok(instruction_id) => {
                 let instruction_response: Response<AddInstructionResponse> =
-                    AddInstructionResponse { instruction_id }.to_response();
+                    AddInstructionResponse::builder()
+                        .instruction_id(instruction_id)
+                        .build()
+                        .to_response();
                 Ok(instruction_response)
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to insert into database: {}",
-                e
+                "Failed to insert into database: {e}"
             ))),
         }
     }
@@ -376,7 +394,7 @@ impl UdmService for DaemonServerContext {
         let delete_result = self.connection.delete(query).await;
         match delete_result {
             Ok(_) => {
-                let remove_response = GenericRemovalResponse {}.to_response();
+                let remove_response = GenericRemovalResponse::builder().build().to_response();
                 Ok(remove_response)
             }
             Err(e) => Err(Status::aborted(e.to_string())),
@@ -405,10 +423,10 @@ impl UdmService for DaemonServerContext {
                 Ok(CollectInstructionResponse { instructions }.to_response())
             }
             Err(e) => {
-                tracing::error!("There was an error collecting {}", e.to_string());
+                let err_msg = e.to_string();
+                tracing::error!("There was an error collecting {}", err_msg);
                 Err(Status::cancelled(format!(
-                    "Failed to query the database: {}",
-                    e
+                    "Failed to query the database: {err_msg}"
                 )))
             }
         }
@@ -428,12 +446,14 @@ impl UdmService for DaemonServerContext {
         let result = self.connection.update(query).await;
         match result {
             Ok(id) => {
-                let response = ModifyInstructionResponse { instruction_id: id }.to_response();
+                let response = ModifyInstructionResponse::builder()
+                    .instruction_id(id)
+                    .build()
+                    .to_response();
                 Ok(response)
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to update into database: {}",
-                e
+                "Failed to update into database: {e}"
             ))),
         }
     }
@@ -453,12 +473,14 @@ impl UdmService for DaemonServerContext {
         match input_result {
             Ok(ingredient_id) => {
                 let ingredient_response: Response<AddIngredientResponse> =
-                    AddIngredientResponse { ingredient_id }.to_response();
+                    AddIngredientResponse::builder()
+                        .ingredient_id(ingredient_id)
+                        .build()
+                        .to_response();
                 Ok(ingredient_response)
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to insert into database: {}",
-                e
+                "Failed to insert into database: {e}"
             ))),
         }
     }
@@ -472,7 +494,7 @@ impl UdmService for DaemonServerContext {
         let delete_result = self.connection.delete(query).await;
         match delete_result {
             Ok(_) => {
-                let remove_response = GenericRemovalResponse {}.to_response();
+                let remove_response = GenericRemovalResponse::builder().build().to_response();
                 Ok(remove_response)
             }
             Err(e) => Err(Status::aborted(e.to_string())),
@@ -483,9 +505,10 @@ impl UdmService for DaemonServerContext {
         request: Request<ModifyIngredientRequest>,
     ) -> Result<Response<ModifyIngredientResponse>, Status> {
         tracing::debug!("Got Request {request:?}");
-        let ingredient = request
-            .get_ref()
-            .clone()
+        let req_inner = request.into_inner();
+        let update_fr = req_inner.update_fr;
+        let update_instruction = req_inner.update_instruction;
+        let ingredient = req_inner
             .ingredient
             .ok_or_else(|| Status::cancelled("Invalid request to remove instruction"))?;
         let query = ingredient
@@ -494,17 +517,17 @@ impl UdmService for DaemonServerContext {
         let ingredient_update_result = self.connection.update(query).await;
         match ingredient_update_result {
             Ok(ingredient_id) => {
-                if request.get_ref().update_fr {
+                if update_fr {
                     if let Some(fr) = ingredient.regulator {
-                        let request = ModifyFluidRegulatorRequest { fluid: Some(fr) };
+                        let request = ModifyFluidRegulatorRequest::builder().fluid(fr).build();
                         let _ = self.update_fluid_regulator(request.into_request()).await?;
                     }
                 }
-                if request.get_ref().update_instruction {
+                if update_instruction {
                     if let Some(instruction) = ingredient.instruction {
-                        let request = ModifyInstructionRequest {
-                            instruction: Some(instruction),
-                        };
+                        let request = ModifyInstructionRequest::builder()
+                            .instruction(instruction)
+                            .build();
                         let _ = self.update_instruction(request.into_request()).await?;
                     }
                 }
@@ -512,8 +535,7 @@ impl UdmService for DaemonServerContext {
                 Ok(ModifyIngredientResponse { ingredient_id }.to_response())
             }
             Err(e) => Err(Status::data_loss(format!(
-                "Failed to update into database: {}",
-                e
+                "Failed to update into database: {e}"
             ))),
         }
     }
@@ -563,10 +585,10 @@ impl UdmService for DaemonServerContext {
                 .to_response())
             }
             Err(e) => {
-                tracing::error!("There was an error collecting {}", e.to_string());
+                let err_msg = e.to_string();
+                tracing::error!("There was an error collecting {}", err_msg);
                 Err(Status::cancelled(format!(
-                    "Failed to query the database: {}",
-                    e
+                    "Failed to query the database: {err_msg}"
                 )))
             }
         }
@@ -583,7 +605,7 @@ impl UdmService for DaemonServerContext {
                 tracing::info!("Successfully dropped rows");
                 Ok(ResetResponse {}.to_response())
             }
-            Err(err) => Err(Status::cancelled(format!("Failed to drop rows: {}", err))),
+            Err(err) => Err(Status::cancelled(format!("Failed to drop rows: {err}"))),
         }
     }
     async fn update_recipe_instruction_order(
@@ -592,9 +614,8 @@ impl UdmService for DaemonServerContext {
     ) -> Result<Response<GenericEmpty>, Status> {
         tracing::debug!("Got {:?}", request);
         let order_requests: Vec<Option<InstructionToRecipeMetadata>> = request
-            .get_ref()
+            .into_inner()
             .recipe_orders
-            .clone()
             .into_iter()
             .map(|req| InstructionToRecipeMetadata::try_from(req).ok())
             .collect_vec();
@@ -639,7 +660,10 @@ impl UdmService for DaemonServerContext {
             .filter_map(|id| async move { id })
             .collect()
             .await;
-        Ok(AddRecipeInstOrderResponse { ids }.to_response())
+        Ok(AddRecipeInstOrderResponse::builder()
+            .ids(ids)
+            .build()
+            .to_response())
     }
 
     async fn collect_recipe_instruction_order(
@@ -669,16 +693,16 @@ impl UdmService for DaemonServerContext {
                     .into_iter()
                     .map(|orders| orders.try_into().ok().unwrap())
                     .collect_vec();
-                Ok(CollectRecipeInstOrderResponse {
-                    recipe_to_instructions,
-                }
-                .to_response())
+                Ok(CollectRecipeInstOrderResponse::builder()
+                    .recipe_to_instructions(recipe_to_instructions)
+                    .build()
+                    .to_response())
             }
             Err(e) => {
-                tracing::error!("There was an error collecting {}", e.to_string());
+                let err_msg = e.to_string();
+                tracing::error!("There was an error collecting {}", err_msg);
                 Err(Status::cancelled(format!(
-                    "Failed to query the database: {}",
-                    e
+                    "Failed to query the database: {err_msg}"
                 )))
             }
         }
@@ -694,7 +718,7 @@ impl UdmService for DaemonServerContext {
         let delete_result = self.connection.delete(query).await;
         match delete_result {
             Ok(_) => {
-                let remove_response = GenericRemovalResponse {}.to_response();
+                let remove_response = GenericRemovalResponse::builder().build().to_response();
                 Ok(remove_response)
             }
             Err(e) => Err(Status::aborted(e.to_string())),
@@ -704,13 +728,13 @@ impl UdmService for DaemonServerContext {
 
 impl DaemonServerContext {
     async fn parse_and_collect_fluid_regulator(&self, fr_id: i32) -> Option<FluidRegulator> {
-        let req = CollectFluidRegulatorsRequest {
-            expressions: vec![FetchData {
-                column: "fr_id".to_string(),
-                operation: Operation::Equal.into(),
-                values: fr_id.to_string(),
-            }],
-        };
+        let req = CollectFluidRegulatorsRequest::builder()
+            .expressions(vec![FetchData::builder()
+                .column("fr_id".to_string())
+                .operation(Operation::Equal.into())
+                .values(fr_id.to_string())
+                .build()])
+            .build();
         match self.collect_fluid_regulators(req.into_request()).await {
             Ok(response) => response.into_inner().fluids.first().cloned(),
             Err(e) => {
@@ -720,13 +744,13 @@ impl DaemonServerContext {
         }
     }
     async fn parse_and_collect_instruction(&self, instruction_id: i32) -> Option<Instruction> {
-        let req = CollectInstructionRequest {
-            expressions: vec![FetchData {
-                column: "instruction_id".to_string(),
-                operation: Operation::Equal.into(),
-                values: instruction_id.to_string(),
-            }],
-        };
+        let req = CollectInstructionRequest::builder()
+            .expressions(vec![FetchData::builder()
+                .column("instruction_id".to_string())
+                .operation(Operation::Equal.into())
+                .values(instruction_id.to_string())
+                .build()])
+            .build();
         match self.collect_instructions(req.into_request()).await {
             Ok(response) => response.into_inner().instructions.first().cloned(),
             Err(e) => {
@@ -740,13 +764,13 @@ impl DaemonServerContext {
         recipe_id: i32,
     ) -> Vec<InstructionToRecipeMetadata> {
         // Collection instruction
-        let fetch_data = vec![FetchData {
-            column: "recipe_id".to_string(),
-            operation: Operation::Equal.into(),
-            values: recipe_id.to_string(),
-        }
-        .to_simple_expr(RecipeSchema::RecipeId)
-        .unwrap()];
+        let fetch_data = vec![FetchData::builder()
+            .column("recipe_id".to_string())
+            .operation(Operation::Equal.into())
+            .values(recipe_id.to_string())
+            .build()
+            .to_simple_expr(RecipeSchema::RecipeId)
+            .unwrap()];
         let data_query = InstructionToRecipeMetadata::gen_select_query_on_fields(
             InstructionToRecipeSchema::Table,
             fetch_data,
@@ -778,13 +802,13 @@ impl DaemonServerContext {
         ids: Vec<i32>,
     ) -> Vec<InstructionToRecipeMetadata> {
         // Collection instruction
-        let fetch_data = vec![FetchData {
-            column: "id".to_string(),
-            operation: Operation::In.into(),
-            values: format!("{:?}", ids),
-        }
-        .to_simple_expr(InstructionToRecipeSchema::Id)
-        .unwrap()];
+        let fetch_data = vec![FetchData::builder()
+            .column("id".to_string())
+            .operation(Operation::In.into())
+            .values(format!("{ids:?}"))
+            .build()
+            .to_simple_expr(InstructionToRecipeSchema::Id)
+            .unwrap()];
         let data_query = InstructionToRecipeMetadata::gen_select_query_on_fields(
             InstructionToRecipeSchema::Table,
             fetch_data,
@@ -810,19 +834,29 @@ impl DaemonServerContext {
         }
     }
 }
+#[derive(Clone, bon::Builder)]
 pub struct SqlDaemonServer {
     configuration: Arc<UdmConfigurer>,
     addr: SocketAddr,
+    notify: Option<Arc<Notify>>,
 }
-
-#[async_trait]
-impl GrpcServerFactory<DaemonServerContext> for SqlDaemonServer {
-    fn new(config: Arc<UdmConfigurer>, addr: SocketAddr) -> Self {
+impl SqlDaemonServer {
+    pub fn new(config: Arc<UdmConfigurer>, addr: SocketAddr, notify: Option<Arc<Notify>>) -> Self {
         Self {
             configuration: config,
             addr,
+            notify,
         }
     }
+    async fn send_notify(&self) {
+        if self.notify.is_some() {
+            tracing::info!("Sending notification that server is ready");
+            self.notify.clone().unwrap().notify_one();
+        }
+    }
+}
+#[async_trait]
+impl GrpcServerFactory<DaemonServerContext> for SqlDaemonServer {
     async fn build_context(&self) -> DaemonServerContext {
         let db_type = Arc::new(DbType::load_db(Arc::clone(&self.configuration)));
         let mut connection = db_type.establish_connection().await;
@@ -830,7 +864,7 @@ impl GrpcServerFactory<DaemonServerContext> for SqlDaemonServer {
         let _ = connection
             .gen_schmea_daemon()
             .await
-            .map_err(|e| format!("Failed to create database schema {}", e));
+            .map_err(|e| format!("Failed to create database schema {e}"));
         tracing::info!("Attempting to Udm Sql Daemon Service on {}", self.addr);
         let db_metadata = DbMetaData::new(Arc::clone(&db_type));
         DaemonServerContext::new(connection, self.addr, db_metadata)
@@ -839,6 +873,7 @@ impl GrpcServerFactory<DaemonServerContext> for SqlDaemonServer {
         let daemon_server = self.build_context().await;
         let udm_service = UdmServiceServer::new(daemon_server);
         tracing::info!("Running Udm Sql Daemon Service on {:?}", self.addr);
+        self.send_notify().await;
         let _ = Server::builder()
             .add_service(udm_service)
             .serve(self.addr)
@@ -849,6 +884,7 @@ impl GrpcServerFactory<DaemonServerContext> for SqlDaemonServer {
         let daemon_server = self.build_context().await;
         let udm_service = UdmServiceServer::new(daemon_server);
         tracing::info!("Running Udm Sql Daemon Service on {:?}", self.addr);
+        self.send_notify().await;
         let _ = Server::builder()
             .add_service(udm_service)
             .serve_with_shutdown(self.addr, async {

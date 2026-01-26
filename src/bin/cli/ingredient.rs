@@ -11,6 +11,7 @@ use cli_table::Style;
 use cli_table::Table;
 use cli_table::TableStruct;
 use lib::db::IngredientSchema;
+use lib::error::trace_log_error;
 use lib::error::UdmError;
 use lib::rpc_types::fhs_types::FluidRegulator;
 use lib::rpc_types::recipe_types::Ingredient;
@@ -50,7 +51,7 @@ impl MainCommandHandler for IngredientCommands {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct AddIngredientArgs {
     #[arg(
         long,
@@ -107,15 +108,17 @@ impl MainCommandHandler for AddIngredientArgs {
             tracing::error!("{}", e);
             std::process::exit(2)
         });
-        let mut open_connection = options.connect().await?;
+        let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .add_ingredient(AddIngredientRequest {
-                ingredient: Some(ingredient),
-            })
+            .add_ingredient(
+                AddIngredientRequest::builder()
+                    .ingredient(ingredient)
+                    .build(),
+            )
             .await
             .map_err(|e| {
                 tracing::error!("{}", &e.to_string());
-                UdmError::ApiFailure(format!("{}", e))
+                trace_log_error(UdmError::ApiFailure(format!("{e}")))
             })?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
@@ -169,8 +172,10 @@ impl UdmGrpcActions<Ingredient> for AddIngredientArgs {
     fn sanatize_input(&self) -> UdmResult<Ingredient> {
         if self.raw.is_some() {
             tracing::debug!("Json passed: {}", &self.raw.clone().unwrap());
-            let ingredient: Ingredient = serde_json::from_str(&self.raw.clone().unwrap())
-                .map_err(|_| UdmError::InvalidInput(String::from("Failed to parse json")))?;
+            let ingredient: Ingredient =
+                serde_json::from_str(&self.raw.clone().unwrap()).map_err(|_| {
+                    trace_log_error(UdmError::InvalidInput(String::from("Failed to parse json")))
+                })?;
             ingredient.validate_without_id_fields()?;
             return Ok(ingredient);
         }
@@ -184,9 +189,9 @@ impl FieldValidation for AddIngredientArgs {
             || self.description.clone().unwrap_or_default().is_empty()
             || self.ingredient_type.clone().unwrap_or_default().is_empty()
         {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Not all values are present".to_string(),
-            ));
+            )));
         }
         Ok(())
     }
@@ -196,14 +201,14 @@ impl FieldValidation for AddIngredientArgs {
             || self.description.clone().unwrap_or_default().is_empty()
             || self.ingredient_type.clone().unwrap_or_default().is_empty()
         {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Not all values are present".to_string(),
-            ));
+            )));
         }
         Ok(())
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct UpdateIngredientArgs {
     #[arg(
         long,
@@ -247,15 +252,17 @@ impl MainCommandHandler for UpdateIngredientArgs {
             tracing::error!("{}", e);
             std::process::exit(2)
         });
-        let mut open_connection = options.connect().await?;
+        let mut open_connection = options.connect_to_udm().await?;
         let response = open_connection
-            .update_ingredient(ModifyIngredientRequest {
-                ingredient: Some(ingredient),
-                update_fr: self.update_fr,
-                update_instruction: self.update_instruction,
-            })
+            .update_ingredient(
+                ModifyIngredientRequest::builder()
+                    .ingredient(ingredient)
+                    .update_fr(self.update_fr)
+                    .update_instruction(self.update_instruction)
+                    .build(),
+            )
             .await
-            .map_err(|e| UdmError::ApiFailure(format!("{}", e)))?;
+            .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))))?;
         tracing::debug!("Got response {:?}", response);
         tracing::info!(
             "Inserted into database, got ID back {}",
@@ -268,8 +275,9 @@ impl UdmGrpcActions<Ingredient> for UpdateIngredientArgs {
     fn sanatize_input(&self) -> UdmResult<Ingredient> {
         if !self.raw.is_empty() {
             tracing::debug!("Json passed: {}", &self.raw);
-            let ingredient: Ingredient = serde_json::from_str(&self.raw)
-                .map_err(|_| UdmError::InvalidInput(String::from("Failed to parse json")))?;
+            let ingredient: Ingredient = serde_json::from_str(&self.raw).map_err(|_| {
+                trace_log_error(UdmError::InvalidInput(String::from("Failed to parse json")))
+            })?;
             ingredient.validate_without_id_fields()?;
             return Ok(ingredient);
         }
@@ -280,9 +288,9 @@ impl UdmGrpcActions<Ingredient> for UpdateIngredientArgs {
 impl FieldValidation for UpdateIngredientArgs {
     fn validate_all_fields(&self) -> UdmResult<()> {
         if self.ingredient_id == 0 {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Ingredient ID is not set".to_string(),
-            ));
+            )));
         }
         Ok(())
     }
@@ -317,7 +325,7 @@ impl TryFrom<&UpdateIngredientArgs> for Ingredient {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct ShowIngredientArgs {
     query_options: Option<String>,
     #[arg(long, short = 'e', help = "Example queries", default_value = "false")]
@@ -336,13 +344,13 @@ impl MainCommandHandler for ShowIngredientArgs {
             Ok(())
         } else {
             let fetched = self.sanatize_input()?;
-            let mut open_connection = options.connect().await?;
+            let mut open_connection = options.connect_to_udm().await?;
             let response = open_connection
                 .collect_ingredients(CollectIngredientRequest {
                     expressions: fetched,
                 })
                 .await
-                .map_err(|e| UdmError::ApiFailure(format!("{}", e)));
+                .map_err(|e| trace_log_error(UdmError::ApiFailure(format!("{e}"))));
             match response {
                 Ok(response) => {
                     tracing::debug!("Got response {:?}", &response);
@@ -353,7 +361,7 @@ impl MainCommandHandler for ShowIngredientArgs {
                     Ok(())
                 }
                 Err(err) => {
-                    println!("Error: Could not show FRs due to: {}", err);
+                    tracing::error!("Error: Could not show FRs due to: {}", err);
                     Ok(())
                 }
             }
@@ -415,16 +423,16 @@ impl ShowHandler<Ingredient> for ShowIngredientArgs {
     }
     fn sanatize_input(&self) -> UdmResult<Vec<FetchData>> {
         if self.query_options.is_none() {
-            return Err(UdmError::InvalidInput(
+            return Err(trace_log_error(UdmError::InvalidInput(
                 "Error while parsing query".to_string(),
-            ));
+            )));
         }
         let collected_queries =
             FetchData::to_fetch_data_vec(self.query_options.clone().unwrap().as_str())?;
         Ok(collected_queries)
     }
 }
-#[derive(Args, Debug)]
+#[derive(Args, Debug, bon::Builder)]
 pub struct RemoveIngredientArgs {
     #[arg(short, long, required = true)]
     ingredient_id: i32,
@@ -445,7 +453,7 @@ impl MainCommandHandler for RemoveIngredientArgs {
         let req = RemoveIngredientRequest {
             ingredient_id: self.ingredient_id,
         };
-        let mut open_conn = options.connect().await?;
+        let mut open_conn = options.connect_to_udm().await?;
         let response = open_conn.remove_ingredient(req).await;
         tracing::debug!("Got response {:?}", response);
         match response {
