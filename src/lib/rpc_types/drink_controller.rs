@@ -180,18 +180,31 @@ impl DrinkControllerService for DrinkControllerContext {
                         .values(pump_num.to_string())
                         .build()])
                     .build()
-            } else {
+            } else if let Some(gpio_pin) = fr.gpio_pin {
                 CollectFluidRegulatorsRequest::builder()
                     .expressions(vec![FetchData::builder()
                         .column("gpio_pin".to_string())
                         .operation(Operation::Equal.into())
-                        .values(fr.gpio_pin.unwrap().to_string())
+                        .values(gpio_pin.to_string())
                         .build()])
                     .build()
+            } else if let Some(gpio_name) = fr.gpio_name {
+                CollectFluidRegulatorsRequest::builder()
+                    .expressions(vec![FetchData::builder()
+                        .column("gpio_name".to_string())
+                        .operation(Operation::Equal.into())
+                        .values(gpio_name.to_string())
+                        .build()])
+                    .build()
+            } else {
+                Err(Status::aborted(
+                    "Error trying to collect the FR from the database",
+                ))?
             }
         };
         let mut sql_client = self.sql_udm_client.clone().unwrap();
         let result = sql_client.collect_fluid_regulators(fetch_query).await?;
+        tracing::debug!("Fetched Fluid Regulators: {:?}", result.get_ref());
         if result.get_ref().fluids.is_empty() || result.get_ref().fluids.len() > 2 {
             return Err(Status::aborted(format!(
                 "Returned no data or too much data {result:?}"

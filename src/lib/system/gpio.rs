@@ -4,10 +4,10 @@ use crate::rpc_types::fhs_types::FluidRegulator;
 use crate::rpc_types::gpio_types::GpioMetadata;
 use crate::UdmResult;
 use bon::Builder;
-use gpiocdev::line::Offset;
-use gpiocdev::Request;
+use gpiod::Chip;
+use gpiod::Options;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum GpioLineType {
     GpioLine(String), // BCM Number or "gpio device line"
     PinNumber(u8),    // GPIO SilkScreen
@@ -27,17 +27,22 @@ impl TryFrom<FluidRegulator> for GpioLineType {
         }
     }
 }
-impl TryFrom<GpioLineType> for Offset {
+impl TryFrom<GpioLineType> for u32 {
     type Error = UdmError;
 
     fn try_from(value: GpioLineType) -> Result<Self, Self::Error> {
         match value {
-            GpioLineType::GpioLine(name) => name.parse::<Offset>().map_err(|e| {
-                trace_log_error(UdmError::InvalidInput(format!(
-                    "Failed to parse GPIO line name to i32: {e}"
-                )))
-            }),
-            GpioLineType::PinNumber(num) => Ok(num as Offset),
+            GpioLineType::GpioLine(name) => name
+                .chars()
+                .filter(|c| c.is_numeric())
+                .collect::<String>()
+                .parse::<u32>()
+                .map_err(|_| {
+                    trace_log_error(UdmError::InvalidInput(format!(
+                        "No valid numeric u32 found in GPIO line name: {name}"
+                    )))
+                }),
+            GpioLineType::PinNumber(num) => Ok(num as u32),
         }
     }
 }
@@ -56,53 +61,38 @@ impl GpioCollection {
             .gpio_chip_path(gpio_chip_path)
             .build()
     }
+    fn collect_chip(&self) -> Option<u8> {
+        self.gpio_chip_path
+            .chars()
+            .filter(|c| c.is_numeric())
+            .collect::<String>()
+            .parse::<u8>()
+            .ok()
+    }
     pub(crate) fn poll(&mut self) -> UdmResult<()> {
-        let request = self.build_request()?;
-        let gpio_lines: Offset = self.line.clone().try_into().map_err(|e| {
+        tracing::debug!("Polling GPIO Line: {:?}", &self.line);
+        let request = self.build_chip()?;
+        let gpio_lines: u32 = self.line.clone().try_into().map_err(|e| {
             trace_log_error(UdmError::GpioError(format!(
-                "Failed to convert GpioLineType to Offset: {e}"
+                "Failed to convert GpioLineType to u32: {e}"
             )))
         })?;
-        let value = request
-            .value(gpio_lines)
-            .map_err(|e| UdmError::GpioError(e.to_string()))?;
-        dbg!(value);
+        // let opts = Options::input([gpio_lines]).consumer("Udm Gpio Collection");
+        // let inputs = request
+        //     .request_lines(opts)
+        //     .map_err(|e| UdmError::GpioError(e.to_string()))?;
+        // let values = inputs.get_values([false; 3])?;
+        let line_info = request.line_info(gpio_lines)?;
+        // dbg!(values);
         Ok(())
     }
 
-    pub(crate) fn build_request(&self) -> UdmResult<Request> {
-        let gpio_lines: Offset = self.line.clone().try_into().map_err(|e| {
-            trace_log_error(UdmError::GpioError(format!(
-                "Failed to convert GpioLineType to Offset: {e}"
-            )))
-        })?;
-        Request::builder()
-            .on_chip(&self.gpio_chip_path)
-            .with_line(gpio_lines)
-            .with_consumer("gpio_collection")
-            .request()
-            .map_err(|e| UdmError::GpioError(e.to_string()))
+    pub(crate) fn build_chip(&self) -> UdmResult<Chip> {
+        if let Some(chip_num) = self.collect_chip() {
+            let chip = Chip::new(chip_num).map_err(|e| UdmError::GpioError(e.to_string()))?;
+            Ok(chip)
+        } else {
+            Err(UdmError::GpioError("Invalid Gpio Chip".to_string()))?
+        }
     }
 }
-// impl GpioFactory for GpioDispensing {}
-// impl GpioFactory for GpioStandBy {}
-// #[allow(dead_code)]
-// trait Calculation {}
-
-// #[allow(dead_code)]
-// pub(crate) struct PollGpio {
-//     pub(crate) gpio_pin: u8,
-//     pub(crate) pin_info: Option<Pin>,
-// }
-// impl PollGpio {
-//     pub fn new(pin: u8) -> UdmResult<Self> {
-//         let gpio = Gpio::new().map_err(|e| UdmError::GpioError(e.to_string()))?;
-//         Ok(Self {
-//             gpio_pin: pin,
-//             pin_info: Some(
-//                 gpio.get(pin)
-//                     .map_err(|e| trace_log_error(UdmError::GpioError(e.to_string())))?,
-//             ),
-//         })
-//     }
-// }
